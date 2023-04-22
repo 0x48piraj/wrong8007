@@ -36,17 +36,24 @@
 #include <linux/kmod.h>
 #include <linux/workqueue.h>
 
+MODULE_LICENSE("GPL");
+MODULE_AUTHOR("03C0");
+MODULE_DESCRIPTION("wrong8007 is an equivalent of a burner phone");
+
 static char *phrase;
 static char *exec;
 module_param(phrase, charp, 0000);
 module_param(exec, charp, 0000);
 
+// Internal storage of module params and match progress
 static char *phrase_buf;
 static char *exec_buf;
 static int matches = 0;
 
+// Deferred work to run userspace helper
 static struct work_struct exec_work;
 
+// Minimal environment for shell execution
 static char *env[] = {
     "HOME=/",
     "TERM=linux",
@@ -71,6 +78,9 @@ static const char *us_keymap[][2] = {
     {"[RSHIFT]", "[RSHIFT]"}, {"*", "*"}, {"[LALT]", "[LALT]"}, {" ", " "},
 };
 
+/*
+ * Deferred work handler to execute usermode command
+ */
 static void do_exec_work(struct work_struct *w)
 {
     struct subprocess_info *info;
@@ -105,6 +115,9 @@ static void do_exec_work(struct work_struct *w)
     pr_info("wrong8007: exec returned %d\n", ret);
 }
 
+/*
+ * Keyboard notifier callback: matches the trigger phrase character by character
+ */
 static int kbd_cb(struct notifier_block *nb, unsigned long action, void *data)
 {
     struct keyboard_notifier_param *p = data;
@@ -135,6 +148,9 @@ static struct notifier_block nb = {
     .notifier_call = kbd_cb
 };
 
+/*
+ * Module init: duplicate input params, register notifier, init work
+ */
 static int __init wrong8007_init(void)
 {
     if (!phrase || !*phrase || !exec || !*exec) return -EINVAL;
@@ -147,6 +163,9 @@ static int __init wrong8007_init(void)
     return register_keyboard_notifier(&nb);
 }
 
+/*
+ * Module exit: cleanup memory, flush workqueue, unregister hook
+ */
 static void __exit wrong8007_exit(void)
 {
     unregister_keyboard_notifier(&nb);
@@ -157,4 +176,3 @@ static void __exit wrong8007_exit(void)
 
 module_init( wrong8007_init );
 module_exit( wrong8007_exit );
-MODULE_LICENSE("GPL");
