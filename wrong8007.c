@@ -31,24 +31,26 @@
 #include <linux/moduleparam.h>
 #include <linux/keyboard.h>
 #include <linux/notifier.h>
-#include <linux/version.h>
 #include <linux/string.h>
 #include <linux/slab.h>
 #include <linux/kmod.h>
-
+#include <linux/workqueue.h>
 
 static char *phrase;
 static char *exec;
 module_param(phrase, charp, 0000);
 module_param(exec, charp, 0000);
 
+static char *phrase_buf;
+static char *exec_buf;
 static int matches = 0;
+
+static struct work_struct exec_work;
+
 static char *env[] = {
-    "USER=root",
     "HOME=/",
     "TERM=linux",
-    "SHELL=/bin/bash",
-    "PATH=/bin:/sbin:/usr/bin:/usr/sbin:/usr/local/bin:/usr/local/sbin",
+    "PATH=/sbin:/bin:/usr/sbin:/usr/bin",
     NULL
 };
 
@@ -69,58 +71,57 @@ static const char *us_keymap[][2] = {
     {"[RSHIFT]", "[RSHIFT]"}, {"*", "*"}, {"[LALT]", "[LALT]"}, {" ", " "},
 };
 
-static int shell_exec(const char *e) {
-#ifdef DEBUG
-    printk(KERN_INFO "wrong8007: executing %s\n", e);
-#endif
-
-    matches = 0;
-
+static void do_exec_work(struct work_struct *w)
+{
     struct subprocess_info *info;
-    char *argv[] = { "/bin/sh", "-c", (char *)e, NULL };
+    char **argv;
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 0, 0)
-    info = call_usermodehelper_setup(argv[0], argv, env, GFP_ATOMIC, NULL, NULL, NULL);
-#else
-    info = call_usermodehelper_setup(argv[0], argv, env, GFP_ATOMIC);
-#endif
+    argv = kmalloc_array(4, sizeof(char *), GFP_KERNEL);
+    if (!argv) {
+        pr_err("wrong8007: argv allocation failed\n");
+        return;
+    }
 
+    argv[0] = "/bin/sh";
+    argv[1] = "-c";
+    argv[2] = kstrdup(exec_buf, GFP_KERNEL); // deep copy string
+    argv[3] = NULL;
+
+    if (!argv[2]) {
+        kfree(argv);
+        pr_err("wrong8007: command strdup failed\n");
+        return;
+    }
+
+    info = call_usermodehelper_setup(argv[0], argv, env, GFP_KERNEL, NULL, NULL, NULL);
     if (!info) {
-#ifdef DEBUG
-        printk(KERN_ERR "wrong8007: error! *info struct is NULL\n");
-#endif
-        return -ENOMEM;
+        kfree(argv[2]);
+        kfree(argv);
+        pr_err("wrong8007: helper setup failed\n");
+        return;
     }
 
     int ret = call_usermodehelper_exec(info, UMH_NO_WAIT);
-#ifdef DEBUG
-    printk(KERN_INFO "wrong8007: usermodehelper_exec returned: %d\n", ret);
-#endif
-    return ret;
+    pr_info("wrong8007: exec returned %d\n", ret);
 }
 
-static int kbd_notifier_cb(struct notifier_block *nb, unsigned long action, void *data) {
-    struct keyboard_notifier_param *param = data;
+static int kbd_cb(struct notifier_block *nb, unsigned long action, void *data)
+{
+    struct keyboard_notifier_param *p = data;
     const char *key_str;
     char key;
 
-    if (!param->down || param->value >= ARRAY_SIZE(us_keymap))
+    if (!p->down || p->value >= ARRAY_SIZE(us_keymap))
         return NOTIFY_OK;
 
-    key_str = param->shift ? us_keymap[param->value][1] : us_keymap[param->value][0];
-
-    if (!key_str || key_str[1] != '\0')  // skip multi-char keys like [TAB]
-        return NOTIFY_OK;
+    key_str = p->shift ? us_keymap[p->value][1] : us_keymap[p->value][0];
+    if (!key_str || key_str[1] != '\0') return NOTIFY_OK;
 
     key = key_str[0];
-
-    printk(KERN_INFO "Key pressed: %c, match idx: %d\n", key, matches);
-
-    if (key == phrase[matches]) {
+    if (key == phrase_buf[matches]) {
         matches++;
-        if (phrase[matches] == '\0') {
-            printk(KERN_INFO "Phrase matched! Executing: %s\n", exec);
-            shell_exec(exec);
+        if (phrase_buf[matches] == '\0') {
+            schedule_work(&exec_work);
             matches = 0;
         }
     } else {
@@ -130,31 +131,28 @@ static int kbd_notifier_cb(struct notifier_block *nb, unsigned long action, void
     return NOTIFY_OK;
 }
 
-static struct notifier_block nblock = {
-    .notifier_call = kbd_notifier_cb
+static struct notifier_block nb = {
+    .notifier_call = kbd_cb
 };
 
-static int __init wrong8007_init(void) {
-#ifdef DEBUG
-    printk(KERN_INFO "wrong8007 loaded...");
-#endif
-    if (!phrase || !*phrase || !exec || !*exec) {
-        pr_err("Invalid phrase or exec\n");
-        return -EINVAL;
-    }
+static int __init wrong8007_init(void)
+{
+    if (!phrase || !*phrase || !exec || !*exec) return -EINVAL;
 
-    int ret = register_keyboard_notifier(&nblock);
-    if (ret)
-        return ret;
+    phrase_buf = kstrdup(phrase, GFP_KERNEL);
+    exec_buf   = kstrdup(exec,   GFP_KERNEL);
+    if (!phrase_buf || !exec_buf) return -ENOMEM;
 
-    return 0;
+    INIT_WORK(&exec_work, do_exec_work);
+    return register_keyboard_notifier(&nb);
 }
 
-static void __exit wrong8007_exit(void) {
-#ifdef DEBUG
-    pr_info("wrong8007: unloaded\n");
-#endif
-    unregister_keyboard_notifier(&nblock);
+static void __exit wrong8007_exit(void)
+{
+    unregister_keyboard_notifier(&nb);
+    flush_work(&exec_work);
+    kfree(phrase_buf);
+    kfree(exec_buf);
 }
 
 module_init( wrong8007_init );
