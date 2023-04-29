@@ -153,14 +153,28 @@ static struct notifier_block nb = {
  */
 static int __init wrong8007_init(void)
 {
-    if (!phrase || !*phrase || !exec || !*exec) return -EINVAL;
+    int err;
+    if (!phrase || !*phrase || !exec || !*exec)
+        return -EINVAL;
 
     phrase_buf = kstrdup(phrase, GFP_KERNEL);
-    exec_buf   = kstrdup(exec,   GFP_KERNEL);
-    if (!phrase_buf || !exec_buf) return -ENOMEM;
+    if (!phrase_buf)
+        return -ENOMEM;
+
+    exec_buf = kstrdup(exec, GFP_KERNEL);
+    if (!exec_buf) {
+        kfree(phrase_buf);
+        return -ENOMEM;
+    }
 
     INIT_WORK(&exec_work, do_exec_work);
-    return register_keyboard_notifier(&nb);
+    err = register_keyboard_notifier(&nb);
+    if (err) {
+        kfree(phrase_buf);
+        kfree(exec_buf);
+        return err;
+    }
+    return 0;
 }
 
 /*
