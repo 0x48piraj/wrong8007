@@ -28,13 +28,9 @@
  */
 #include <linux/kernel.h>
 #include <linux/module.h>
-#include <linux/moduleparam.h>
-#include <linux/keyboard.h>
-#include <linux/notifier.h>
-#include <linux/string.h>
 #include <linux/slab.h>
 #include <linux/kmod.h>
-#include <linux/workqueue.h>
+#include "wrong8007.h"
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("03C0");
@@ -45,13 +41,20 @@ static char *exec;
 module_param(phrase, charp, 0000);
 module_param(exec, charp, 0000);
 
-// Internal storage of module params and match progress
-static char *phrase_buf;
-static char *exec_buf;
-static int matches = 0;
+// Internal storage of module params
+char *phrase_buf;
+char *exec_buf;
 
 // Deferred work to run userspace helper
-static struct work_struct exec_work;
+struct work_struct exec_work;
+
+// Exported trigger list
+extern struct wrong8007_trigger keyboard_trigger;
+
+static struct wrong8007_trigger *triggers[] = {
+    &keyboard_trigger,
+    NULL
+};
 
 // Minimal environment for shell execution
 static char *env[] = {
@@ -59,23 +62,6 @@ static char *env[] = {
     "TERM=linux",
     "PATH=/sbin:/bin:/usr/sbin:/usr/bin",
     NULL
-};
-
-// Simplified US keymap
-static const char *us_keymap[][2] = {
-    {"\0", "\0"}, {"[ESC]", "[ESC]"}, {"1", "!"}, {"2", "@"},
-    {"3", "#"}, {"4", "$"}, {"5", "%"}, {"6", "^"},
-    {"7", "&"}, {"8", "*"}, {"9", "("}, {"0", ")"},
-    {"-", "_"}, {"=", "+"}, {"[BKSP]", "[BKSP]"}, {"[TAB]", "[TAB]"},
-    {"q", "Q"}, {"w", "W"}, {"e", "E"}, {"r", "R"}, {"t", "T"},
-    {"y", "Y"}, {"u", "U"}, {"i", "I"}, {"o", "O"}, {"p", "P"},
-    {"[", "{"}, {"]", "}"}, {"\n", "\n"}, {"[LCTRL]", "[LCTRL]"},
-    {"a", "A"}, {"s", "S"}, {"d", "D"}, {"f", "F"}, {"g", "G"},
-    {"h", "H"}, {"j", "J"}, {"k", "K"}, {"l", "L"}, {";", ":"},
-    {"'", "\""}, {"`", "~"}, {"[LSHIFT]", "[LSHIFT]"}, {"\\", "|"},
-    {"z", "Z"}, {"x", "X"}, {"c", "C"}, {"v", "V"}, {"b", "B"},
-    {"n", "N"}, {"m", "M"}, {",", "<"}, {".", ">"}, {"/", "?"},
-    {"[RSHIFT]", "[RSHIFT]"}, {"*", "*"}, {"[LALT]", "[LALT]"}, {" ", " "},
 };
 
 /*
@@ -116,44 +102,11 @@ static void do_exec_work(struct work_struct *w)
 }
 
 /*
- * Keyboard notifier callback: matches the trigger phrase character by character
- */
-static int kbd_cb(struct notifier_block *nb, unsigned long action, void *data)
-{
-    struct keyboard_notifier_param *p = data;
-    const char *key_str;
-    char key;
-
-    if (!p->down || p->value >= ARRAY_SIZE(us_keymap))
-        return NOTIFY_OK;
-
-    key_str = p->shift ? us_keymap[p->value][1] : us_keymap[p->value][0];
-    if (!key_str || key_str[1] != '\0') return NOTIFY_OK;
-
-    key = key_str[0];
-    if (key == phrase_buf[matches]) {
-        matches++;
-        if (phrase_buf[matches] == '\0') {
-            schedule_work(&exec_work);
-            matches = 0;
-        }
-    } else {
-        matches = 0;
-    }
-
-    return NOTIFY_OK;
-}
-
-static struct notifier_block nb = {
-    .notifier_call = kbd_cb
-};
-
-/*
  * Module init: duplicate input params, register notifier, init work
  */
 static int __init wrong8007_init(void)
 {
-    int err;
+    int i, err;
     if (!phrase || !*phrase || !exec || !*exec)
         return -EINVAL;
 
@@ -168,13 +121,25 @@ static int __init wrong8007_init(void)
     }
 
     INIT_WORK(&exec_work, do_exec_work);
-    err = register_keyboard_notifier(&nb);
-    if (err) {
-        kfree(phrase_buf);
-        kfree(exec_buf);
-        return err;
+
+    for (i = 0; triggers[i]; i++) {
+        err = triggers[i]->init();
+        if (err) {
+            pr_err("wrong8007: failed to init trigger: %s\n", triggers[i]->name);
+            goto fail;
+        }
     }
+
+    pr_info("wrong8007: loaded\n");
     return 0;
+
+fail:
+    while (--i >= 0)
+        triggers[i]->exit();
+
+    kfree(phrase_buf);
+    kfree(exec_buf);
+    return err;
 }
 
 /*
@@ -182,10 +147,14 @@ static int __init wrong8007_init(void)
  */
 static void __exit wrong8007_exit(void)
 {
-    unregister_keyboard_notifier(&nb);
+    int i;
+    for (i = 0; triggers[i]; i++)
+        triggers[i]->exit();
+
     flush_work(&exec_work);
     kfree(phrase_buf);
     kfree(exec_buf);
+    pr_info("wrong8007: unloaded\n");
 }
 
 module_init( wrong8007_init );
