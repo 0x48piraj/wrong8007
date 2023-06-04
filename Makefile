@@ -19,6 +19,9 @@ load:
 remove:
 	sudo rmmod wrong8007.ko
 
+# Reload the module
+reload: remove default load
+
 # Clean build artifacts
 clean:
 	$(MAKE) -C $(KDIR) M=$(PWD) clean
