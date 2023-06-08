@@ -1,5 +1,5 @@
 obj-m := wrong8007.o
-wrong8007-objs := core.o trigger_keyboard.o # Add other triggers here
+wrong8007-objs := core.o trigger_keyboard.o trigger_usb.o
 KDIR := /usr/lib/modules/$(shell uname -r)/build
 PWD := $(shell pwd)
 
