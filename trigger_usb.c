@@ -34,25 +34,36 @@
 // Internal storage of module params
 static int usb_vid;
 static int usb_pid;
+static char *usb_event = "insert"; // default: "insert", can be "eject" or "any"
 
 module_param(usb_vid, int, 0000);
 module_param(usb_pid, int, 0000);
+module_param(usb_event, charp, 0000);
 
 MODULE_PARM_DESC(usb_vid, "USB Vendor ID");
 MODULE_PARM_DESC(usb_pid, "USB Product ID");
+MODULE_PARM_DESC(usb_event, "USB event to trigger on: insert, eject, or any");
 
 // Declare the external exec_work from main module
 extern struct work_struct exec_work;
+
+// Helper: check if action matches config
+static bool match_event(unsigned long action)
+{
+    return (action == USB_DEVICE_ADD && (!strcmp(usb_event, "insert") || !strcmp(usb_event, "any"))) ||
+           (action == USB_DEVICE_REMOVE && (!strcmp(usb_event, "eject") || !strcmp(usb_event, "any")));
+}
 
 // USB notifier callback
 static int usb_notifier_callback(struct notifier_block *self, unsigned long action, void *dev)
 {
     struct usb_device *udev = dev;
 
-    if (action == USB_DEVICE_ADD &&
-        udev->descriptor.idVendor == cpu_to_le16(usb_vid) &&
-        udev->descriptor.idProduct == cpu_to_le16(usb_pid)) {
+    if (le16_to_cpu(udev->descriptor.idVendor) != usb_vid ||
+        le16_to_cpu(udev->descriptor.idProduct) != usb_pid)
+        return NOTIFY_OK;
 
+    if (match_event(action)) {
         pr_info("wrong8007: USB trigger matched. Scheduling exec.\n");
         schedule_work(&exec_work);
     }
@@ -73,7 +84,7 @@ static int trigger_usb_init(void)
     }
 
     usb_register_notify(&usb_nb);
-    pr_info("wrong8007: USB trigger initialized (VID=0x%04x, PID=0x%04x)\n", usb_vid, usb_pid);
+    pr_info("wrong8007: USB trigger initialized (EVENT=%s, VID=0x%04x, PID=0x%04x)\n", usb_event, usb_vid, usb_pid);
     return 0; // in recent kernels, usb_register_notify returns void
 }
 
