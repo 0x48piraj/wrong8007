@@ -10,7 +10,7 @@ default:
 # Load module with runtime params
 load:
 	@if [ -z "$(PHRASE)" ] || [ -z "$(EXEC)" ] || [ -z "$(USB_VID)" ] || [ -z "$(USB_PID)" ]; then \
-		echo "Usage: make load PHRASE='<phrase>' EXEC='<path-to-script>' USB_VID=0xXXXX USB_PID=0xYYYY"; \
+		echo "Usage: make load PHRASE='<phrase>' EXEC='<path-to-script>' USB_VID=0xXXXX USB_PID=0xYYYY [USB_EVENT=insert|eject|any]"; \
 		exit 1; \
 	fi
 
@@ -18,7 +18,8 @@ load:
 		phrase='$(PHRASE)' \
 		exec='$(EXEC)' \
 		usb_vid=$(USB_VID) \
-		usb_pid=$(USB_PID)
+		usb_pid=$(USB_PID) \
+		$(if $(USB_EVENT),usb_event=$(USB_EVENT))
 
 # Unload the module
 remove:
