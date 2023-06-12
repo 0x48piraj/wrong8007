@@ -31,8 +31,15 @@
 #include <linux/usb.h>
 #include "wrong8007.h"
 
-#define USB_VENDOR_ID  0x1234
-#define USB_PRODUCT_ID 0x5678
+// Internal storage of module params
+static int usb_vid;
+static int usb_pid;
+
+module_param(usb_vid, int, 0000);
+module_param(usb_pid, int, 0000);
+
+MODULE_PARM_DESC(usb_vid, "USB Vendor ID");
+MODULE_PARM_DESC(usb_pid, "USB Product ID");
 
 // Declare the external exec_work from main module
 extern struct work_struct exec_work;
@@ -43,8 +50,8 @@ static int usb_notifier_callback(struct notifier_block *self, unsigned long acti
     struct usb_device *udev = dev;
 
     if (action == USB_DEVICE_ADD &&
-        udev->descriptor.idVendor == cpu_to_le16(USB_VENDOR_ID) &&
-        udev->descriptor.idProduct == cpu_to_le16(USB_PRODUCT_ID)) {
+        udev->descriptor.idVendor == cpu_to_le16(usb_vid) &&
+        udev->descriptor.idProduct == cpu_to_le16(usb_pid)) {
 
         pr_info("wrong8007: USB trigger matched. Scheduling exec.\n");
         schedule_work(&exec_work);
@@ -60,8 +67,13 @@ static struct notifier_block usb_nb = {
 
 static int trigger_usb_init(void)
 {
+    if (!usb_vid || !usb_pid) {
+        pr_err("wrong8007: USB trigger requires VID and PID\n");
+        return -EINVAL;
+    }
+
     usb_register_notify(&usb_nb);
-    pr_info("wrong8007: USB trigger initialized\n");
+    pr_info("wrong8007: USB trigger initialized (VID=0x%04x, PID=0x%04x)\n", usb_vid, usb_pid);
     return 0; // in recent kernels, usb_register_notify returns void
 }
 
