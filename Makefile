@@ -9,11 +9,16 @@ default:
 
 # Load module with runtime params
 load:
-	@if [ -z "$(PHRASE)" ] || [ -z "$(EXEC)" ]; then \
-		echo "Usage: make load PHRASE='<phrase>' EXEC='<path-to-script>'"; \
+	@if [ -z "$(PHRASE)" ] || [ -z "$(EXEC)" ] || [ -z "$(USB_VID)" ] || [ -z "$(USB_PID)" ]; then \
+		echo "Usage: make load PHRASE='<phrase>' EXEC='<path-to-script>' USB_VID=0xXXXX USB_PID=0xYYYY"; \
 		exit 1; \
-	fi; \
-	sudo insmod wrong8007.ko phrase='$(PHRASE)' exec='$(EXEC)'
+	fi
+
+	sudo insmod wrong8007.ko \
+		phrase='$(PHRASE)' \
+		exec='$(EXEC)' \
+		usb_vid=$(USB_VID) \
+		usb_pid=$(USB_PID)
 
 # Unload the module
 remove:
