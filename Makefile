@@ -14,6 +14,11 @@ load:
 		exit 1; \
 	fi
 
+	@if [ -n "$(USB_EVENT)" ] && [ "$(USB_EVENT)" != "insert" ] && [ "$(USB_EVENT)" != "eject" ] && [ "$(USB_EVENT)" != "any" ]; then \
+		echo "Error: USB_EVENT must be one of: insert, eject, any"; \
+		exit 1; \
+	fi
+
 	sudo insmod wrong8007.ko \
 		phrase='$(PHRASE)' \
 		exec='$(EXEC)' \
