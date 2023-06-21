@@ -14,7 +14,6 @@
 #include <linux/inet.h>
 #include <linux/version.h>
 
-
 #include "wrong8007.h"
 
 /* Params: pick what you need */
@@ -51,7 +50,14 @@ static bool parse_mac(const char *mac_str, u8 *out)
 /* Convert IPv4 string to __be32 */
 static bool parse_ip(const char *ip_str, __be32 *out)
 {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,38)
     return ip_str && in4_pton(ip_str, -1, (u8 *)out, '\0', NULL);
+#else
+    if (!ip_str)
+        return false;
+    *out = in_aton(ip_str);
+    return *out != 0;
+#endif
 }
 
 /* Heartbeat timer handler */
