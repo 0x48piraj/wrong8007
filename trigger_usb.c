@@ -79,8 +79,8 @@ static struct notifier_block usb_nb = {
 static int trigger_usb_init(void)
 {
     if (!usb_vid || !usb_pid) {
-        pr_err("wrong8007: USB trigger requires VID and PID\n");
-        return -EINVAL;
+        pr_info("wrong8007: USB trigger disabled (no VID/PID)\n");
+        return 0; // success, but no hook
     }
 
     usb_register_notify(&usb_nb);

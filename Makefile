@@ -31,8 +31,8 @@ load:
 	sudo insmod wrong8007.ko \
 		phrase='$(PHRASE)' \
 		exec='$(EXEC)' \
-		usb_vid=$(USB_VID) \
-		usb_pid=$(USB_PID) \
+		$(if $(USB_VID),usb_vid=$(USB_VID)) \
+		$(if $(USB_PID),usb_pid=$(USB_PID)) \
 		$(if $(USB_EVENT),usb_event=$(USB_EVENT)) \
 		$(if $(MATCH_MAC),match_mac=$(MATCH_MAC)) \
 		$(if $(MATCH_IP),match_ip=$(MATCH_IP)) \
