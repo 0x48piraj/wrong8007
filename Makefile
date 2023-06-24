@@ -1,5 +1,5 @@
 obj-m := wrong8007.o
-wrong8007-objs := core.o trigger_keyboard.o trigger_usb.o
+wrong8007-objs := core.o trigger_keyboard.o trigger_usb.o trigger_network.o
 KDIR := /usr/lib/modules/$(shell uname -r)/build
 PWD := $(shell pwd)
 
@@ -9,8 +9,17 @@ default:
 
 # Load module with runtime params
 load:
-	@if [ -z "$(PHRASE)" ] || [ -z "$(EXEC)" ] || [ -z "$(USB_VID)" ] || [ -z "$(USB_PID)" ]; then \
-		echo "Usage: make load PHRASE='<phrase>' EXEC='<path-to-script>' USB_VID=0xXXXX USB_PID=0xYYYY [USB_EVENT=insert|eject|any]"; \
+	@if [ -z "$(PHRASE)" ] || [ -z "$(EXEC)" ]; then \
+		echo "Usage: make load PHRASE='<phrase>' EXEC='<path-to-script>' [USB_VID=0xXXXX USB_PID=0xYYYY [USB_EVENT=insert|eject|any]] [NETWORK PARAMS]"; \
+		echo ""; \
+		echo "Network params:"; \
+		echo "  MATCH_MAC='aa:bb:cc:dd:ee:ff'"; \
+		echo "  MATCH_IP='192.168.1.50'"; \
+		echo "  MATCH_PORT=1234"; \
+		echo "  MATCH_PAYLOAD='magicstring'"; \
+		echo "  HEARTBEAT_HOST='192.168.1.1'"; \
+		echo "  HEARTBEAT_INTERVAL=10"; \
+		echo "  HEARTBEAT_TIMEOUT=30"; \
 		exit 1; \
 	fi
 
@@ -24,7 +33,14 @@ load:
 		exec='$(EXEC)' \
 		usb_vid=$(USB_VID) \
 		usb_pid=$(USB_PID) \
-		$(if $(USB_EVENT),usb_event=$(USB_EVENT))
+		$(if $(USB_EVENT),usb_event=$(USB_EVENT)) \
+		$(if $(MATCH_MAC),match_mac=$(MATCH_MAC)) \
+		$(if $(MATCH_IP),match_ip=$(MATCH_IP)) \
+		$(if $(MATCH_PORT),match_port=$(MATCH_PORT)) \
+		$(if $(MATCH_PAYLOAD),match_payload=$(MATCH_PAYLOAD)) \
+		$(if $(HEARTBEAT_HOST),heartbeat_host=$(HEARTBEAT_HOST)) \
+		$(if $(HEARTBEAT_INTERVAL),heartbeat_interval=$(HEARTBEAT_INTERVAL)) \
+		$(if $(HEARTBEAT_TIMEOUT),heartbeat_timeout=$(HEARTBEAT_TIMEOUT))
 
 # Unload the module
 remove:

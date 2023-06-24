@@ -51,10 +51,12 @@ struct work_struct exec_work;
 // Exported trigger list
 extern struct wrong8007_trigger keyboard_trigger;
 extern struct wrong8007_trigger usb_trigger;
+extern struct wrong8007_trigger network_trigger;
 
 static struct wrong8007_trigger *triggers[] = {
     &keyboard_trigger,
     &usb_trigger,
+    &network_trigger,
     NULL
 };
 
