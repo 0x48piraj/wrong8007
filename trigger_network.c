@@ -1,7 +1,34 @@
+/*
+ * Copyright (c) 2023, Piyush Raj (https://piyushraj.org/)
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *
+ *   * Redistributions of source code must retain the above copyright notice,
+ *     this list of conditions and the following disclaimer.
+ *   * Redistributions in binary form must reproduce the above copyright
+ *     notice, this list of conditions and the following disclaimer in the
+ *     documentation and/or other materials provided with the distribution.
+ *   * Neither the name of Gibson nor the names of its contributors may be used
+ *     to endorse or promote products derived from this software without
+ *     specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ */
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/netdevice.h>
-#include <linux/inetdevice.h>
 #include <linux/netfilter.h>
 #include <linux/netfilter_ipv4.h>
 #include <linux/ip.h>
@@ -41,10 +68,47 @@ static struct nf_hook_ops nfho;
 static struct timer_list hb_timer;
 static unsigned long last_seen_jiffies;
 
-/* Convert MAC string to bytes */
-static bool parse_mac(const char *mac_str, u8 *out)
+/* Parse MAC address in formats:
+ *   aa:bb:cc:dd:ee:ff
+ *   aa-bb-cc-dd-ee-ff
+ *   aabbccddeeff
+ * Accepts upper or lower case hex. Returns true on success and fills out[].
+ */
+static bool parse_mac(const char *s, u8 *out)
 {
-    return mac_str && mac_pton(mac_str, out) == 0;
+    int i = 0;
+    int hi = -1; /* high nibble accumulator, -1 means waiting for high nibble */
+
+    if (!s || !out)
+        return false;
+
+    while (*s && i < ETH_ALEN) {
+        char c = *s++;
+
+        /* convert hex nibble; skip separators */
+        int val;
+        if (c >= '0' && c <= '9')
+            val = c - '0';
+        else if (c >= 'a' && c <= 'f')
+            val = c - 'a' + 10;
+        else if (c >= 'A' && c <= 'F')
+            val = c - 'A' + 10;
+        else
+            continue; /* skip ':' '-' or any other separator */
+
+        if (hi == -1) {
+            hi = val;
+        } else {
+            out[i++] = (u8)((hi << 4) | val);
+            hi = -1;
+        }
+    }
+
+    /* must have exactly 6 bytes and no stray half-nibble */
+    if (i == ETH_ALEN && hi == -1)
+        return true;
+
+    return false;
 }
 
 /* Convert IPv4 string to __be32 */
@@ -160,7 +224,7 @@ static int trigger_network_init(void)
 
     if (match_mac) {
         if (!parse_mac(match_mac, mac_bytes)) {
-            pr_err("wrong8007: Invalid MAC format\n");
+            pr_err("wrong8007: Invalid MAC format: '%s'\n", match_mac);
             return -EINVAL;
         }
     }
