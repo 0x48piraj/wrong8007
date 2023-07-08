@@ -115,3 +115,46 @@ Several security researchers presented a paper ([`WRIG08`](http://www.springerli
 The researchers found that the probability of recovering a single bit from a previously used HDD was **only slightly better than a coin toss**, and that the probability of recovering more bits **decreases exponentially** so that it quickly becomes close to zero.
 
 #### Therefore, a single pass overwrite with any arbitrary value (randomly chosen or not) is sufficient to render the original HDD data effectively irretrievable.”
+
+## Extend with battle-tested data destruction utilities
+
+Extend the base wiping script with powerful, battle-tested data shredding utilities. These tools can be seamlessly integrated into your custom scripts for deeper, more flexible wiping protocols.
+
+Here are some great options - all open-source, well-documented, and actively used by security-conscious folks.
+
+### 1. **[nwipe](https://github.com/martijnvanbrummelen/nwipe)**
+
+> *A modern, open-source fork of the legendary DBAN.*
+
+* Originally designed for boot-and-nuke scenarios, now works perfectly inside Linux.
+* Can wipe entire disks using multiple recognized algorithms (DoD 5220.22-M, Gutmann, PRNG patterns, etc.).
+* Has both interactive mode **and** fully scriptable batch mode.
+* Displays real-time progress and verification.
+* Ideal if you want a full-disk, standards-compliant wipe without reinventing the wheel.
+
+### 2. **[shred](https://www.gnu.org/software/coreutils/manual/html_node/shred-invocation.html)**
+
+> *The classic Unix command for securely overwriting data.*
+
+* Included with GNU coreutils (no need to install extra packages on most systems).
+* Works on files, partitions, and raw block devices.
+* Overwrites multiple times with configurable patterns, then optionally truncates.
+* Perfect for quick, script-friendly wipes where you control the exact number of passes.
+
+### 3. **[wipe](https://github.com/gmr/wipe)**
+
+> *A lightweight tool for secure deletion of files and devices.*
+
+* Designed to securely erase data by writing special patterns.
+* Implements several sanitization methods from well-known standards.
+* Simple to integrate into automated scripts — minimal dependencies.
+* Good middle-ground between the simplicity of `shred` and the full-disk capabilities of `nwipe`.
+
+### 4. **[scrub](https://linux.die.net/man/1/scrub)**
+
+> *Fast, configurable, and built for raw speed.*
+
+* Can target disks, partitions, or files.
+* Supports a range of wiping schemes, from simple random data fills to NNSA and DoD-compliant methods.
+* Lightweight and easy to run headless.
+* Great option for high-speed, full-device overwrites.
