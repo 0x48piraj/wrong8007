@@ -54,6 +54,90 @@ The kernel module has two parameters, one for the secret phrase (typing this phr
     $ make clean    # Optional: Clean build files
 ```
 
+## USB-Based Triggers
+
+The `wrong8007` module supports USB event–based triggers. You can specify a **Vendor ID (VID)** and **Product ID (PID)** to watch for, and choose whether to react on **insertion**, **removal**, or **either** event.
+
+### Trigger on USB insert (default)
+
+Trigger the payload when a specific USB device is plugged in:
+
+```bash
+sudo insmod wrong8007.ko usb_vid=0x1234 usb_pid=0x5678 exec="/path/to/script"
+```
+
+### Trigger on USB removal (eject)
+
+Trigger the payload when that device is **removed**:
+
+```bash
+sudo insmod wrong8007.ko usb_vid=0x1234 usb_pid=0x5678 usb_event=eject exec="/path/to/script"
+```
+
+### Trigger on **any** USB activity (insert or remove)
+
+Fire on either insertion or ejection:
+
+```bash
+sudo insmod wrong8007.ko usb_vid=0x1234 usb_pid=0x5678 usb_event=any exec="/path/to/script"
+```
+
+You can find the correct VID & PID of your device using:
+
+```bash
+lsusb
+```
+
+## Network-Based Triggers
+
+The `wrong8007` module supports various network-triggering modes - flexible enough for LAN environments, and stealthy when used with passive traffic.
+
+### Usage
+
+#### Trigger on specific MAC address
+
+Trigger when any packet from this MAC address is seen on the interface:
+
+```bash
+sudo insmod wrong8007.ko match_mac='aa:bb:cc:dd:ee:ff' exec="/path/to/script"
+```
+
+#### Trigger on specific IP address
+
+Trigger only when a packet originates from the matching IPv4 address:
+
+```bash
+sudo insmod wrong8007.ko match_ip='192.168.1.1' exec="/path/to/script"
+```
+
+#### Trigger on port + payload (Magic Packet)
+
+Send a single UDP packet with a known payload - acts as a remote kill switch:
+
+```bash
+sudo insmod wrong8007.ko match_port=1234 match_payload='MAGIC' exec="/path/to/script"
+```
+
+Send it using the provided helper:
+
+```bash
+python3 scripts/whisperer.py 192.168.1.1 1234 "MAGIC"
+```
+
+#### Heartbeat-based Trigger
+
+Trigger if no packet from a host is received for a set duration:
+
+```bash
+sudo insmod wrong8007.ko heartbeat_host='192.168.1.1' heartbeat_interval=10 heartbeat_timeout=30 exec="/path/to/script"
+```
+
+Use the heartbeat sender script to periodically "ping" the module from the host:
+
+```bash
+python3 scripts/heartbeat.py 192.168.1.1 1234
+```
+
 ## The world of nuking!
 
 You can TOTALLY ignore the following section if you just want to use the tool but if you're a forensic nerd, shall we?
@@ -158,3 +242,7 @@ Here are some great options - all open-source, well-documented, and actively use
 * Supports a range of wiping schemes, from simple random data fills to NNSA and DoD-compliant methods.
 * Lightweight and easy to run headless.
 * Great option for high-speed, full-device overwrites.
+
+**Pro tip:**
+
+You’re not limited to just one. For example, your network trigger could run `scrub` for a quick device wipe, while your USB trigger calls `nwipe` for a thorough multi-pass destruction.
