@@ -88,6 +88,32 @@ You can find the correct VID & PID of your device using:
 lsusb
 ```
 
+#### ⚠️ Note on parameter validation and trigger behavior
+
+This project accepts dynamic configuration at load time via module parameters such as `PHRASE`, `EXEC`, `USB_VID`, `USB_PID`, and optionally `USB_EVENT` introduced in this commit, [`875ff0a`](https://github.com/0x48piraj/wrong8007/commit/875ff0a9a8f7aee6515918a857ce067a2416f78a).
+
+To ensure correctness and avoid unexpected behavior:
+
+* The `Makefile` performs **basic validation** of required parameters and restricts `USB_EVENT` to valid values: `insert`, `eject`, or `any`.
+* If invalid or unsupported values are provided (e.g. `USB_EVENT=foobar`), and you're using the `Makefile`, it will **fail early** with a helpful message.
+
+> If `usb_vid` and `usb_pid` are not set, the USB trigger module **disables itself silently** and will not hook into USB events.
+
+* However, if you're using `insmod` directly, you bypass the `Makefile` validation. In that case, it’s your responsibility to ensure valid inputs.
+
+The kernel module does **not** include extensive runtime validation for invalid `USB_EVENT` values to avoid bloating the kernel with unnecessary checks.
+
+This is an intentional design choice:
+
+- **Lightweight kernel code**
+- **Controlled from user space**
+- **Sanity checks enforced via build tooling**
+
+**Summary**:
+
+* Use the `Makefile` → gets validated.
+* Use `insmod` manually → know what you’re doing.
+
 ## Network-Based Triggers
 
 The `wrong8007` module supports various network-triggering modes - flexible enough for LAN environments, and stealthy when used with passive traffic.
@@ -137,6 +163,31 @@ Use the heartbeat sender script to periodically "ping" the module from the host:
 ```bash
 python3 scripts/heartbeat.py 192.168.1.1 1234
 ```
+
+#### ⚠️ Nuanced behavior of network-based triggers using IP/MAC
+
+> MAC-based triggers can activate immediately and unexpectedly, because any frame (such as ARP, broadcast, or even passive presence) from the target MAC is enough to trigger the module - no IP traffic is required.
+>
+>  IP-based triggers are slightly more restrictive - they only fire when a valid IP packet is seen from the specified address. If the device hasn’t sent anything yet at the IP layer, the trigger won't activate.
+>
+> If you're using MAC- or IP-only triggers on devices already active on the same network (e.g., your own machine), you risk triggering the payload immediately on load, which can lead to unintended consequences including self-triggering.
+
+To avoid accidental activation:
+
+- Do not rely solely on MAC/IP triggers in sensitive environments.
+- Prefer using magic packets if precision is critical. You can use `whisperer.py`, or any network utility to "poke" the module.
+- Ensure your trigger source is not present on the network during module load (e.g., an external device that only joins the network when needed).
+
+While limited, MAC/IP-only triggers are not useless, they shine in scenarios where:
+
+- The target device is not always connected, and
+- You want the module to activate only when that specific MAC or IP joins the network.
+
+This makes them ideal for:
+
+- Air-gapped or controlled environments
+- Proximity-based activation
+- Triggers that rely on the appearance of a trusted device
 
 ## The world of nuking!
 
