@@ -28,19 +28,19 @@ load:
 		exit 1; \
 	fi
 
-	sudo insmod wrong8007.ko \
-		phrase='$(PHRASE)' \
-		exec='$(EXEC)' \
-		$(if $(USB_VID),usb_vid=$(USB_VID)) \
-		$(if $(USB_PID),usb_pid=$(USB_PID)) \
-		$(if $(USB_EVENT),usb_event=$(USB_EVENT)) \
-		$(if $(MATCH_MAC),match_mac=$(MATCH_MAC)) \
-		$(if $(MATCH_IP),match_ip=$(MATCH_IP)) \
-		$(if $(MATCH_PORT),match_port=$(MATCH_PORT)) \
-		$(if $(MATCH_PAYLOAD),match_payload=$(MATCH_PAYLOAD)) \
-		$(if $(HEARTBEAT_HOST),heartbeat_host=$(HEARTBEAT_HOST)) \
-		$(if $(HEARTBEAT_INTERVAL),heartbeat_interval=$(HEARTBEAT_INTERVAL)) \
-		$(if $(HEARTBEAT_TIMEOUT),heartbeat_timeout=$(HEARTBEAT_TIMEOUT))
+	@PARAMS="phrase='$(PHRASE)' exec='$(EXEC)'"; \
+	[ -n "$(USB_VID)" ] && PARAMS="$$PARAMS usb_vid=$(USB_VID)"; \
+	[ -n "$(USB_PID)" ] && PARAMS="$$PARAMS usb_pid=$(USB_PID)"; \
+	[ -n "$(USB_EVENT)" ] && PARAMS="$$PARAMS usb_event=$(USB_EVENT)"; \
+	[ -n "$(MATCH_MAC)" ] && PARAMS="$$PARAMS match_mac=$(MATCH_MAC)"; \
+	[ -n "$(MATCH_IP)" ] && PARAMS="$$PARAMS match_ip=$(MATCH_IP)"; \
+	[ -n "$(MATCH_PORT)" ] && PARAMS="$$PARAMS match_port=$(MATCH_PORT)"; \
+	[ -n "$(MATCH_PAYLOAD)" ] && PARAMS="$$PARAMS match_payload='$(MATCH_PAYLOAD)'"; \
+	[ -n "$(HEARTBEAT_HOST)" ] && PARAMS="$$PARAMS heartbeat_host=$(HEARTBEAT_HOST)"; \
+	[ -n "$(HEARTBEAT_INTERVAL)" ] && PARAMS="$$PARAMS heartbeat_interval=$(HEARTBEAT_INTERVAL)"; \
+	[ -n "$(HEARTBEAT_TIMEOUT)" ] && PARAMS="$$PARAMS heartbeat_timeout=$(HEARTBEAT_TIMEOUT)"; \
+	echo "sudo insmod wrong8007.ko $$PARAMS"; \
+	sudo insmod wrong8007.ko $$PARAMS
 
 # Unload the module
 remove:
