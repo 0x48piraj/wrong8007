@@ -36,13 +36,10 @@ MODULE_LICENSE("GPL");
 MODULE_AUTHOR("03C0");
 MODULE_DESCRIPTION("wrong8007 is an equivalent of a burner phone");
 
-static char *phrase;
 static char *exec;
-module_param(phrase, charp, 0000);
 module_param(exec, charp, 0000);
 
 // Internal storage of module params
-char *phrase_buf;
 char *exec_buf;
 
 // Deferred work to run userspace helper
@@ -111,16 +108,11 @@ static void do_exec_work(struct work_struct *w)
 static int __init wrong8007_init(void)
 {
     int i, err;
-    if (!phrase || !*phrase || !exec || !*exec)
+    if (!exec || !*exec)
         return -EINVAL;
-
-    phrase_buf = kstrdup(phrase, GFP_KERNEL);
-    if (!phrase_buf)
-        return -ENOMEM;
 
     exec_buf = kstrdup(exec, GFP_KERNEL);
     if (!exec_buf) {
-        kfree(phrase_buf);
         return -ENOMEM;
     }
 
@@ -141,7 +133,6 @@ fail:
     while (--i >= 0)
         triggers[i]->exit();
 
-    kfree(phrase_buf);
     kfree(exec_buf);
     return err;
 }
@@ -156,7 +147,6 @@ static void __exit wrong8007_exit(void)
         triggers[i]->exit();
 
     flush_work(&exec_work);
-    kfree(phrase_buf);
     kfree(exec_buf);
     pr_info("wrong8007: unloaded\n");
 }

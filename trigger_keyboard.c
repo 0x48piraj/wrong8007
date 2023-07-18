@@ -26,10 +26,24 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
+#include <linux/kernel.h>
+#include <linux/module.h>
 #include <linux/keyboard.h>
 #include <linux/notifier.h>
 #include <linux/string.h>
+
 #include "wrong8007.h"
+
+static char *phrase;
+
+module_param(phrase, charp, 0000);
+MODULE_PARM_DESC(phrase, "Keyboard input to trigger on (e.g., 'nuke')");
+
+// Internal storage of module params
+char *phrase_buf;
+
+// Declare the external exec_work from main module
+extern struct work_struct exec_work;
 
 // Simplified US keymap
 static const char *us_keymap[][2] = {
@@ -64,8 +78,11 @@ static int kbd_cb(struct notifier_block *nb, unsigned long action, void *data)
         return NOTIFY_OK;
 
     key_str = p->shift ? us_keymap[p->value][1] : us_keymap[p->value][0];
+
+    // Skip if special key (length != 1)
     if (!key_str || key_str[1] != '\0') return NOTIFY_OK;
 
+    // Match only printable single chars
     key = key_str[0];
     if (key == phrase_buf[matches]) {
         matches++;
@@ -86,14 +103,28 @@ static struct notifier_block nb = {
 
 static int trigger_keyboard_init(void)
 {
-    return register_keyboard_notifier(&nb);
+    if (!phrase || !*phrase) {
+        pr_info("wrong8007: keyboard trigger disabled (no phrase)\n");
+        return 0; // success, no hook
+    }
+
+    phrase_buf = kstrdup(phrase, GFP_KERNEL);
+    if (!phrase_buf)
+        return -ENOMEM;
+
+    register_keyboard_notifier(&nb);
+    pr_info("wrong8007: keyboard trigger initialized (PHRASE=%s)\n", phrase);
+    return 0;
 }
 
 static void trigger_keyboard_exit(void)
 {
     unregister_keyboard_notifier(&nb);
+    kfree(phrase_buf);
+    pr_info("wrong8007: keyboard trigger exited\n");
 }
 
+// Expose as a trigger plugin
 struct wrong8007_trigger keyboard_trigger = {
     .name = "keyboard",
     .init = trigger_keyboard_init,
