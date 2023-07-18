@@ -9,8 +9,8 @@ default:
 
 # Load module with runtime params
 load:
-	@if [ -z "$(PHRASE)" ] || [ -z "$(EXEC)" ]; then \
-		echo "Usage: make load PHRASE='<phrase>' EXEC='<path-to-script>' [USB_VID=0xXXXX USB_PID=0xYYYY [USB_EVENT=insert|eject|any]] [NETWORK PARAMS]"; \
+	@if [ -z "$(EXEC)" ]; then \
+		echo "Usage: make load [PHRASE='<phrase>'] EXEC='<path-to-script>' [USB_VID=0xXXXX USB_PID=0xYYYY [USB_EVENT=insert|eject|any]] [NETWORK PARAMS]"; \
 		echo ""; \
 		echo "Network params:"; \
 		echo "  MATCH_MAC='aa:bb:cc:dd:ee:ff'"; \
@@ -28,7 +28,8 @@ load:
 		exit 1; \
 	fi
 
-	@PARAMS="phrase='$(PHRASE)' exec='$(EXEC)'"; \
+	@PARAMS="exec='$(EXEC)'"; \
+	[ -n "$(PHRASE)" ] && PARAMS="$$PARAMS phrase=$(PHRASE)"; \
 	[ -n "$(USB_VID)" ] && PARAMS="$$PARAMS usb_vid=$(USB_VID)"; \
 	[ -n "$(USB_PID)" ] && PARAMS="$$PARAMS usb_pid=$(USB_PID)"; \
 	[ -n "$(USB_EVENT)" ] && PARAMS="$$PARAMS usb_event=$(USB_EVENT)"; \
