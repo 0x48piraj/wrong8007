@@ -112,6 +112,8 @@ static int trigger_keyboard_init(void)
     if (!phrase_buf)
         return -ENOMEM;
 
+    matches = 0; // reset match progress
+
     register_keyboard_notifier(&nb);
     pr_info("wrong8007: keyboard trigger initialized (PHRASE=%s)\n", phrase);
     return 0;
@@ -119,8 +121,12 @@ static int trigger_keyboard_init(void)
 
 static void trigger_keyboard_exit(void)
 {
+    if (!phrase || !*phrase)
+        return; // never registered
+
     unregister_keyboard_notifier(&nb);
     kfree(phrase_buf);
+    phrase_buf = NULL;
     pr_info("wrong8007: keyboard trigger exited\n");
 }
 
