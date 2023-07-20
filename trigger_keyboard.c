@@ -103,6 +103,8 @@ static struct notifier_block nb = {
 
 static int trigger_keyboard_init(void)
 {
+    int ret;
+
     if (!phrase || !*phrase) {
         pr_info("wrong8007: keyboard trigger disabled (no phrase)\n");
         return 0; // success, no hook
@@ -114,7 +116,14 @@ static int trigger_keyboard_init(void)
 
     matches = 0; // reset match progress
 
-    register_keyboard_notifier(&nb);
+    ret = register_keyboard_notifier(&nb);
+    if (ret) {
+        pr_err("wrong8007: failed to register keyboard notifier (err=%d)\n", ret);
+        kfree(phrase_buf);
+        phrase_buf = NULL;
+        return ret;
+    }
+
     pr_info("wrong8007: keyboard trigger initialized (PHRASE=%s)\n", phrase);
     return 0;
 }
