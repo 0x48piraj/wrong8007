@@ -29,6 +29,7 @@
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/usb.h>
+
 #include "wrong8007.h"
 
 // Internal storage of module params
@@ -90,6 +91,9 @@ static int trigger_usb_init(void)
 
 static void trigger_usb_exit(void)
 {
+    if (!usb_vid || !usb_pid)
+        return; // never registered
+
     usb_unregister_notify(&usb_nb);
     pr_info("wrong8007: USB trigger exited\n");
 }
