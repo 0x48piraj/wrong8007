@@ -40,7 +40,7 @@ At last, installing the kernel module,
 ```bash
     $ # sudo insmod wrong8007.ko phrase="secret phrase" exec="/root/binary"
     $ chmod +x wipe.sh
-    $ test -f wipe.sh && make load PHRASE=nuke!nuke!nuke1 EXEC="$(realpath wipe.sh)"
+    $ test -f wipe.sh && make load PHRASE='secret phrase' EXEC="$(realpath wipe.sh)"
 ```
 
 The kernel module has two parameters, one for the secret phrase (typing this phrase will be the trigger so _chose wisely_) and the second for the path to an executable. The design of this project was intentionally made modular to allow for customization and the use of individualized solutions (by default, it comes with a rudimentary script for nuking).
@@ -63,7 +63,7 @@ The `wrong8007` module supports USB event–based triggers. You can specify a **
 Trigger the payload when a specific USB device is plugged in:
 
 ```bash
-sudo insmod wrong8007.ko usb_vid=0x1234 usb_pid=0x5678 exec="/path/to/script"
+make load USB_VID=0x1234 USB_PID=0x5678 EXEC="/path/to/script"
 ```
 
 ### Trigger on USB removal (eject)
@@ -71,7 +71,7 @@ sudo insmod wrong8007.ko usb_vid=0x1234 usb_pid=0x5678 exec="/path/to/script"
 Trigger the payload when that device is **removed**:
 
 ```bash
-sudo insmod wrong8007.ko usb_vid=0x1234 usb_pid=0x5678 usb_event=eject exec="/path/to/script"
+make load USB_VID=0x1234 USB_PID=0x5678 USB_EVENT=eject EXEC="/path/to/script"
 ```
 
 ### Trigger on **any** USB activity (insert or remove)
@@ -79,7 +79,7 @@ sudo insmod wrong8007.ko usb_vid=0x1234 usb_pid=0x5678 usb_event=eject exec="/pa
 Fire on either insertion or ejection:
 
 ```bash
-sudo insmod wrong8007.ko usb_vid=0x1234 usb_pid=0x5678 usb_event=any exec="/path/to/script"
+make load USB_VID=0x1234 USB_PID=0x5678 USB_EVENT=any EXEC="/path/to/script"
 ```
 
 You can find the correct VID & PID of your device using:
@@ -125,7 +125,7 @@ The `wrong8007` module supports various network-triggering modes - flexible enou
 Trigger when any packet from this MAC address is seen on the interface:
 
 ```bash
-sudo insmod wrong8007.ko match_mac='aa:bb:cc:dd:ee:ff' exec="/path/to/script"
+make load MATCH_MAC='aa:bb:cc:dd:ee:ff' EXEC="/path/to/script"
 ```
 
 #### Trigger on specific IP address
@@ -133,7 +133,7 @@ sudo insmod wrong8007.ko match_mac='aa:bb:cc:dd:ee:ff' exec="/path/to/script"
 Trigger only when a packet originates from the matching IPv4 address:
 
 ```bash
-sudo insmod wrong8007.ko match_ip='192.168.1.1' exec="/path/to/script"
+make load MATCH_IP='192.168.1.1' EXEC="/path/to/script"
 ```
 
 #### Trigger on port + payload (Magic Packet)
@@ -141,7 +141,7 @@ sudo insmod wrong8007.ko match_ip='192.168.1.1' exec="/path/to/script"
 Send a single UDP packet with a known payload - acts as a remote kill switch:
 
 ```bash
-sudo insmod wrong8007.ko match_port=1234 match_payload='MAGIC' exec="/path/to/script"
+make load MATCH_PORT=1234 MATCH_PAYLOAD='MAGIC' EXEC="/path/to/script"
 ```
 
 Send it using the provided helper:
@@ -155,7 +155,7 @@ python3 scripts/whisperer.py 192.168.1.1 1234 "MAGIC"
 Trigger if no packet from a host is received for a set duration:
 
 ```bash
-sudo insmod wrong8007.ko heartbeat_host='192.168.1.1' heartbeat_interval=10 heartbeat_timeout=30 exec="/path/to/script"
+make load HEARTBEAT_HOST='192.168.1.1' HEARTBEAT_INTERVAL=10 HEARTBEAT_TIMEOUT=30 EXEC="/path/to/script"
 ```
 
 Use the heartbeat sender script to periodically "ping" the module from the host:
