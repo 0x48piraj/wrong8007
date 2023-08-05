@@ -41,7 +41,7 @@
 #include <linux/inet.h>
 #include <linux/version.h>
 
-#include "wrong8007.h"
+#include <wrong8007.h>
 
 /* Params: pick what you need */
 static char *match_mac = NULL;       // MAC address in "aa:bb:cc:dd:ee:ff" or NULL

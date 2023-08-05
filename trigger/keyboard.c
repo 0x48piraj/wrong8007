@@ -32,7 +32,7 @@
 #include <linux/notifier.h>
 #include <linux/string.h>
 
-#include "wrong8007.h"
+#include <wrong8007.h>
 
 static char *phrase;
 

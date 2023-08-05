@@ -30,7 +30,8 @@
 #include <linux/module.h>
 #include <linux/slab.h>
 #include <linux/kmod.h>
-#include "wrong8007.h"
+
+#include <wrong8007.h>
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("03C0");

@@ -30,7 +30,7 @@
 #include <linux/module.h>
 #include <linux/usb.h>
 
-#include "wrong8007.h"
+#include <wrong8007.h>
 
 // Internal storage of module params
 static int usb_vid;
