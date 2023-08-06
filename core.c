@@ -72,34 +72,15 @@ static char *env[] = {
 static void do_exec_work(struct work_struct *w)
 {
     struct subprocess_info *info;
-    char **argv;
+    const char *argv[4] = { "/bin/sh", "-c", exec_buf, NULL };
 
-    argv = kmalloc_array(4, sizeof(char *), GFP_KERNEL);
-    if (!argv) {
-        pr_err("wrong8007: argv allocation failed\n");
-        return;
-    }
-
-    argv[0] = "/bin/sh";
-    argv[1] = "-c";
-    argv[2] = kstrdup(exec_buf, GFP_KERNEL); // deep copy string
-    argv[3] = NULL;
-
-    if (!argv[2]) {
-        kfree(argv);
-        pr_err("wrong8007: command strdup failed\n");
-        return;
-    }
-
-    info = call_usermodehelper_setup(argv[0], argv, env, GFP_KERNEL, NULL, NULL, NULL);
+    info = call_usermodehelper_setup(argv[0], (char **)argv, env, GFP_KERNEL, NULL, NULL, NULL);
     if (!info) {
-        kfree(argv[2]);
-        kfree(argv);
         pr_err("wrong8007: helper setup failed\n");
         return;
     }
 
-    int ret = call_usermodehelper_exec(info, UMH_NO_WAIT);
+    int ret = call_usermodehelper_exec(info, UMH_WAIT_PROC);
     pr_info("wrong8007: exec returned %d\n", ret);
 }
 
