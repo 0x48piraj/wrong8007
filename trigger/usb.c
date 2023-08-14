@@ -29,44 +29,65 @@
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/usb.h>
+#include <linux/string.h>
 
 #include <wrong8007.h>
 
-// Internal storage of module params
-static int usb_vid;
-static int usb_pid;
-static char *usb_event = "insert"; // default: "insert", can be "eject" or "any"
+#define MAX_USB_DEVICES 16
 
-module_param(usb_vid, int, 0000);
-module_param(usb_pid, int, 0000);
-module_param(usb_event, charp, 0000);
+/* Arrays for multi-device configuration */
+static int usb_vids[MAX_USB_DEVICES];
+static int usb_pids[MAX_USB_DEVICES];
+static char *usb_events[MAX_USB_DEVICES];
 
-MODULE_PARM_DESC(usb_vid, "USB Vendor ID");
-MODULE_PARM_DESC(usb_pid, "USB Product ID");
-MODULE_PARM_DESC(usb_event, "USB event to trigger on: insert, eject, or any");
+/* Actual number of configured devices */
+static int usb_count_vid;
+static int usb_count_pid;
+static int usb_count_evt;
+
+/* Module params */
+module_param_array(usb_vids, int, &usb_count_vid, 0000);
+MODULE_PARM_DESC(usb_vids, "Array of USB Vendor IDs");
+
+module_param_array(usb_pids, int, &usb_count_pid, 0000);
+MODULE_PARM_DESC(usb_pids, "Array of USB Product IDs");
+
+module_param_array(usb_events, charp, &usb_count_evt, 0000);
+MODULE_PARM_DESC(usb_events, "Array of USB events: insert, eject, or any");
 
 // Declare the external exec_work from main module
 extern struct work_struct exec_work;
 
-// Helper: check if action matches config
-static bool match_event(unsigned long action)
+/* Helper: whether the action matches the configured string */
+static bool match_event_type(const char *event, unsigned long action)
 {
-    return (action == USB_DEVICE_ADD && (!strcmp(usb_event, "insert") || !strcmp(usb_event, "any"))) ||
-           (action == USB_DEVICE_REMOVE && (!strcmp(usb_event, "eject") || !strcmp(usb_event, "any")));
+    if (!event)
+        return false;
+    return (action == USB_DEVICE_ADD &&
+            (!strcmp(event, "insert") || !strcmp(event, "any"))) ||
+           (action == USB_DEVICE_REMOVE &&
+            (!strcmp(event, "eject") || !strcmp(event, "any")));
 }
 
-// USB notifier callback
-static int usb_notifier_callback(struct notifier_block *self, unsigned long action, void *dev)
+static int usb_notifier_callback(struct notifier_block *self,
+                                 unsigned long action, void *dev)
 {
     struct usb_device *udev = dev;
+    u16 vid = le16_to_cpu(udev->descriptor.idVendor);
+    u16 pid = le16_to_cpu(udev->descriptor.idProduct);
+    int i;
 
-    if (le16_to_cpu(udev->descriptor.idVendor) != usb_vid ||
-        le16_to_cpu(udev->descriptor.idProduct) != usb_pid)
-        return NOTIFY_OK;
+    for (i = 0; i < min3(usb_count_vid, usb_count_pid, usb_count_evt); i++) {
+        if (vid == (u16)usb_vids[i] &&
+            pid == (u16)usb_pids[i] &&
+            match_event_type(usb_events[i], action)) {
 
-    if (match_event(action)) {
-        pr_info("wrong8007: USB trigger matched. Scheduling exec.\n");
-        schedule_work(&exec_work);
+            pr_info("wrong8007: USB trigger[%d] matched "
+                    "(VID=0x%04x PID=0x%04x EVENT=%s). Scheduling exec.\n",
+                    i, vid, pid, usb_events[i]);
+            schedule_work(&exec_work);
+            break;
+        }
     }
 
     return NOTIFY_OK;
@@ -79,21 +100,34 @@ static struct notifier_block usb_nb = {
 
 static int trigger_usb_init(void)
 {
-    if (!usb_vid || !usb_pid) {
-        pr_info("wrong8007: USB trigger disabled (no VID/PID)\n");
-        return 0; // success, but no hook
+    int i;
+
+    if (usb_count_vid != usb_count_pid || usb_count_vid != usb_count_evt) {
+        pr_err("wrong8007: usb_vids, usb_pids, and usb_events must have same length\n");
+        return -EINVAL;
+    }
+    if (usb_count_vid <= 0) {
+        pr_err("wrong8007: No USB devices configured\n");
+        return -EINVAL;
+    }
+
+    for (i = 0; i < usb_count_vid; i++) {
+        if (!usb_events[i]) {
+            pr_err("wrong8007: usb_events[%d] is NULL\n", i);
+            return -EINVAL;
+        }
+        pr_info("wrong8007: Configured USB trigger[%d] "
+                "(VID=0x%04x PID=0x%04x EVENT=%s)\n",
+                i, usb_vids[i], usb_pids[i], usb_events[i]);
     }
 
     usb_register_notify(&usb_nb);
-    pr_info("wrong8007: USB trigger initialized (EVENT=%s, VID=0x%04x, PID=0x%04x)\n", usb_event, usb_vid, usb_pid);
-    return 0; // in recent kernels, usb_register_notify returns void
+    pr_info("wrong8007: USB multi-device trigger initialized\n");
+    return 0;
 }
 
 static void trigger_usb_exit(void)
 {
-    if (!usb_vid || !usb_pid)
-        return; // never registered
-
     usb_unregister_notify(&usb_nb);
     pr_info("wrong8007: USB trigger exited\n");
 }
