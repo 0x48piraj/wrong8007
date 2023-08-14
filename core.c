@@ -54,8 +54,7 @@ extern struct wrong8007_trigger network_trigger;
 static struct wrong8007_trigger *triggers[] = {
     &keyboard_trigger,
     &usb_trigger,
-    &network_trigger,
-    NULL
+    &network_trigger
 };
 
 // Minimal environment for shell execution
@@ -100,7 +99,7 @@ static int __init wrong8007_init(void)
 
     INIT_WORK(&exec_work, do_exec_work);
 
-    for (i = 0; triggers[i]; i++) {
+    for (i = 0; i < ARRAY_SIZE(triggers); i++) {
         err = triggers[i]->init();
         if (err) {
             pr_err("wrong8007: failed to init trigger: %s\n", triggers[i]->name);
@@ -125,7 +124,7 @@ fail:
 static void __exit wrong8007_exit(void)
 {
     int i;
-    for (i = 0; triggers[i]; i++)
+    for (i = 0; i < ARRAY_SIZE(triggers); i++)
         triggers[i]->exit();
 
     flush_work(&exec_work);
