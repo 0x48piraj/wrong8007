@@ -83,8 +83,13 @@ static int parse_usb_devices(void)
             usb_rules[usb_rule_count].event = USB_EVT_INSERT;
         else if (!strcmp(evt_str, "eject"))
             usb_rules[usb_rule_count].event = USB_EVT_EJECT;
-        else
+        else if (!strcmp(evt_str, "any"))
             usb_rules[usb_rule_count].event = USB_EVT_ANY;
+        else {
+            pr_err("wrong8007: Unknown event '%s' in rule '%s'\n",
+                evt_str, usb_devices[i]);
+            return -EINVAL;
+        }
 
         pr_info("wrong8007: rule[%d] VID=0x%04x PID=0x%04x EVENT=%s\n",
                 usb_rule_count, vid, pid, evt_str);
