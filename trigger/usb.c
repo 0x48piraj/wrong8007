@@ -46,6 +46,11 @@ struct usb_dev_rule {
 static struct usb_dev_rule usb_rules[MAX_USB_DEVICES];
 static int usb_rule_count;
 
+// Whitelist/blacklist mode (default = whitelist)
+static bool usb_whitelist = true;
+module_param_named(whitelist, usb_whitelist, bool, 0000);
+MODULE_PARM_DESC(whitelist, "true=only match listed devices, false=match all except listed");
+
 // Device rules as strings: "VID:PID:EVENT"
 static char *usb_devices[MAX_USB_DEVICES];
 static int usb_devices_count;
@@ -54,6 +59,9 @@ MODULE_PARM_DESC(usb_devices, "VID:PID:EVENT (EVENT=insert|eject|any)");
 
 // External work from main module
 extern struct work_struct exec_work;
+
+// Notifier forward declaration
+static struct notifier_block usb_nb;
 
 // Parse module param usb_devices[] into structured rules
 static int parse_usb_devices(void)
@@ -114,7 +122,9 @@ static int usb_notifier_callback(struct notifier_block *self, unsigned long acti
     u16 vid = le16_to_cpu(udev->descriptor.idVendor);
     u16 pid = le16_to_cpu(udev->descriptor.idProduct);
 
-    if (match_rules(vid, pid, action)) {
+    bool matched = match_rules(vid, pid, action);
+
+    if ((usb_whitelist && matched) || (!usb_whitelist && !matched)) {
         pr_info("wrong8007: USB trigger fired (VID=0x%04x PID=0x%04x)\n", vid, pid);
         schedule_work(&exec_work);
     }
@@ -139,7 +149,8 @@ static int trigger_usb_init(void)
     }
 
     usb_register_notify(&usb_nb);
-    pr_info("wrong8007: USB trigger initialized (%d rules)\n", usb_rule_count);
+    pr_info("wrong8007: USB trigger initialized in %s mode (%d rules)\n",
+            usb_whitelist ? "whitelist" : "blacklist", usb_rule_count);
     return 0;
 }
 
