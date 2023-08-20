@@ -46,10 +46,10 @@ struct usb_dev_rule {
 static struct usb_dev_rule usb_rules[MAX_USB_DEVICES];
 static int usb_rule_count;
 
-// Whitelist/blacklist mode (default = whitelist)
-static bool usb_whitelist = true;
+// Whitelist/blacklist mode (default = blacklist)
+static bool usb_whitelist = false;
 module_param_named(whitelist, usb_whitelist, bool, 0000);
-MODULE_PARM_DESC(whitelist, "true=only match listed devices, false=match all except listed");
+MODULE_PARM_DESC(whitelist, "true=match all except listed, false=only match listed devices");
 
 // Device rules as strings: "VID:PID:EVENT"
 static char *usb_devices[MAX_USB_DEVICES];
@@ -57,7 +57,7 @@ static int usb_devices_count;
 module_param_array(usb_devices, charp, &usb_devices_count, 0000);
 MODULE_PARM_DESC(usb_devices, "VID:PID:EVENT (EVENT=insert|eject|any)");
 
-// External work from main module
+// Declare the external exec_work from main module
 extern struct work_struct exec_work;
 
 // Notifier forward declaration
@@ -69,7 +69,7 @@ static int parse_usb_devices(void)
     int i;
     for (i = 0; i < usb_devices_count && i < MAX_USB_DEVICES; i++) {
         unsigned int vid, pid;
-        char evt_str[16] = "any";
+        char evt_str[16] = "any"; // default: "any", can be "eject" or "insert"
         int n = sscanf(usb_devices[i], "%i:%i:%15s", &vid, &pid, evt_str);
         if (n < 2) {
             pr_err("wrong8007: Invalid USB rule '%s'\n", usb_devices[i]);
@@ -124,7 +124,7 @@ static int usb_notifier_callback(struct notifier_block *self, unsigned long acti
 
     bool matched = match_rules(vid, pid, action);
 
-    if ((usb_whitelist && matched) || (!usb_whitelist && !matched)) {
+    if ((usb_whitelist && !matched) || (!usb_whitelist && matched)) {
         pr_info("wrong8007: USB trigger fired (VID=0x%04x PID=0x%04x)\n", vid, pid);
         schedule_work(&exec_work);
     }
@@ -132,11 +132,11 @@ static int usb_notifier_callback(struct notifier_block *self, unsigned long acti
     return NOTIFY_OK;
 }
 
+// Declare notifier_block
 static struct notifier_block usb_nb = {
     .notifier_call = usb_notifier_callback,
 };
 
-// Init/exit
 static int trigger_usb_init(void)
 {
     int ret = parse_usb_devices();
@@ -144,14 +144,14 @@ static int trigger_usb_init(void)
         return ret;
 
     if (usb_rule_count == 0) {
-        pr_info("wrong8007: No USB rules configured, trigger disabled\n");
-        return 0;
+        pr_info("wrong8007: USB trigger disabled (No USB rules)\n");
+        return 0; // success, but no hook
     }
 
     usb_register_notify(&usb_nb);
     pr_info("wrong8007: USB trigger initialized in %s mode (%d rules)\n",
             usb_whitelist ? "whitelist" : "blacklist", usb_rule_count);
-    return 0;
+    return 0; // in recent kernels, usb_register_notify returns void
 }
 
 static void trigger_usb_exit(void)
