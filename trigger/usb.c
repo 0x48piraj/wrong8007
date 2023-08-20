@@ -69,9 +69,9 @@ static int parse_usb_devices(void)
     int i;
     for (i = 0; i < usb_devices_count && i < MAX_USB_DEVICES; i++) {
         unsigned int vid, pid;
-        char evt_str[16];
+        char evt_str[16] = "any";
         int n = sscanf(usb_devices[i], "%x:%x:%15s", &vid, &pid, evt_str);
-        if (n != 3) {
+        if (n < 2) {
             pr_err("wrong8007: Invalid USB rule '%s'\n", usb_devices[i]);
             return -EINVAL;
         }
@@ -83,13 +83,8 @@ static int parse_usb_devices(void)
             usb_rules[usb_rule_count].event = USB_EVT_INSERT;
         else if (!strcmp(evt_str, "eject"))
             usb_rules[usb_rule_count].event = USB_EVT_EJECT;
-        else if (!strcmp(evt_str, "any"))
+        else
             usb_rules[usb_rule_count].event = USB_EVT_ANY;
-        else {
-            pr_err("wrong8007: Unknown event '%s' in rule '%s'\n",
-                   evt_str, usb_devices[i]);
-            return -EINVAL;
-        }
 
         pr_info("wrong8007: rule[%d] VID=0x%04x PID=0x%04x EVENT=%s\n",
                 usb_rule_count, vid, pid, evt_str);
