@@ -70,7 +70,7 @@ static int parse_usb_devices(void)
     for (i = 0; i < usb_devices_count && i < MAX_USB_DEVICES; i++) {
         unsigned int vid, pid;
         char evt_str[16] = "any";
-        int n = sscanf(usb_devices[i], "%x:%x:%15s", &vid, &pid, evt_str);
+        int n = sscanf(usb_devices[i], "%i:%i:%15s", &vid, &pid, evt_str);
         if (n < 2) {
             pr_err("wrong8007: Invalid USB rule '%s'\n", usb_devices[i]);
             return -EINVAL;
