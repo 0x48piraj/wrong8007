@@ -11,7 +11,12 @@ default:
 # Load module with runtime params
 load:
 	@if [ -z "$(EXEC)" ]; then \
-		echo "Usage: make load [PHRASE='<phrase>'] EXEC='<path-to-script>' [USB_VID=0xXXXX USB_PID=0xYYYY [USB_EVENT=insert|eject|any]] [NETWORK PARAMS]"; \
+		echo "Usage: make load EXEC='<path-to-script>' [PHRASE='<phrase>'] [USB_DEVICES='vid:pid:event,...'] [WHITELIST=0|1] [NETWORK PARAMS]"; \
+		echo ""; \
+		echo "USB params:"; \
+		echo "  USB_DEVICES='1234:5678:insert,abcd:ef00:eject,0xXXXX:0xYYYY:any'"; \
+		echo "  WHITELIST=1 (only allow listed devices, block others)"; \
+		echo "  WHITELIST=0 (block listed devices, allow others)"; \
 		echo ""; \
 		echo "Network params:"; \
 		echo "  MATCH_MAC='aa:bb:cc:dd:ee:ff'"; \
@@ -24,16 +29,10 @@ load:
 		exit 1; \
 	fi
 
-	@if [ -n "$(USB_EVENT)" ] && [ "$(USB_EVENT)" != "insert" ] && [ "$(USB_EVENT)" != "eject" ] && [ "$(USB_EVENT)" != "any" ]; then \
-		echo "Error: USB_EVENT must be one of: insert, eject, any"; \
-		exit 1; \
-	fi
-
 	@PARAMS="exec='$(EXEC)'"; \
 	[ -n "$(PHRASE)" ] && PARAMS="$$PARAMS phrase=$(PHRASE)"; \
-	[ -n "$(USB_VID)" ] && PARAMS="$$PARAMS usb_vid=$(USB_VID)"; \
-	[ -n "$(USB_PID)" ] && PARAMS="$$PARAMS usb_pid=$(USB_PID)"; \
-	[ -n "$(USB_EVENT)" ] && PARAMS="$$PARAMS usb_event=$(USB_EVENT)"; \
+	[ -n "$(USB_DEVICES)" ] && PARAMS="$$PARAMS usb_devices=$(USB_DEVICES)"; \
+	[ -n "$(WHITELIST)" ] && PARAMS="$$PARAMS whitelist=$(WHITELIST)"; \
 	[ -n "$(MATCH_MAC)" ] && PARAMS="$$PARAMS match_mac=$(MATCH_MAC)"; \
 	[ -n "$(MATCH_IP)" ] && PARAMS="$$PARAMS match_ip=$(MATCH_IP)"; \
 	[ -n "$(MATCH_PORT)" ] && PARAMS="$$PARAMS match_port=$(MATCH_PORT)"; \
