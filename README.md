@@ -2,7 +2,7 @@
 
 **Wrong Boot** (*codename: `wrong8007`*) is a **programmable dead man's switch** for Linux, living entirely in kernel space. Think of it as the software equivalent of a burner phone - but for your data.
 
-Inspired by [USBKill](https://github.com/hephaest0s/usbkill) and reinvented from scratch, it's **modular, trigger-agnostic**, and **execution-flexible**: you choose how it activates, you choose what it does.
+Inspired by the legendary [USBKill](https://github.com/hephaest0s/usbkill) project and reinvented from scratch, it's **modular, trigger-agnostic**, and **execution-flexible**: you choose how it activates, you choose what it does.
 
 Whether that's securely nuking sensitive files, cutting network links, or triggering custom defense scripts - it's in your control.
 
@@ -45,7 +45,7 @@ Wrong Boot's architecture keeps **triggers** separate from the **core logic**, m
                    └─────────────────────────┘
 ```
 
-For example, the keyboard trigger (`trigger_keyboard.c`) listens for a secret phrase; if it matches, it runs your configured executable instantly. Other triggers (USB, network) work independently - load the module with any combination you need.
+For example, the keyboard trigger (`trigger/keyboard.c`) listens for a secret phrase; if it matches, it runs your configured executable instantly. Other triggers (USB, network) work independently - load the module with any combination you need.
 
 You can read more about the project's design philosophy [here](docs/DESIGN.md).
 
@@ -100,63 +100,96 @@ At last, installing the kernel module,
 
 ## USB-Based Triggers
 
-The `wrong8007` module supports USB event–based triggers. You can specify a **Vendor ID (VID)** and **Product ID (PID)** to watch for, and choose whether to react on **insertion**, **removal**, or **either** event.
+The `wrong8007` kernel module supports advanced USB event–based triggers with flexible configuration:
 
-### Trigger on USB insert (default)
+* **Multiple USB devices supported** in a single load.
+* Fine-grained control over **event types**: insertion, removal (eject), or any activity.
+* Support for **whitelisting** or **blacklisting** USB devices.
 
-Trigger the payload when a specific USB device is plugged in:
+### Usage
 
-```bash
-make load USB_VID=0x1234 USB_PID=0x5678 EXEC="/path/to/script"
-```
+You can specify a list of USB devices using their **Vendor ID (VID)** and **Product ID (PID)**, along with an event type.
 
-### Trigger on USB removal (eject)
-
-Trigger the payload when that device is **removed**:
+#### Load module with a single device trigger on insertion/ejection (default)
 
 ```bash
-make load USB_VID=0x1234 USB_PID=0x5678 USB_EVENT=eject EXEC="/path/to/script"
+make load USB_DEVICES="1234:5678" EXEC="/path/to/script"
 ```
 
-### Trigger on **any** USB activity (insert or remove)
-
-Fire on either insertion or ejection:
+#### Trigger on removal (eject)
 
 ```bash
-make load USB_VID=0x1234 USB_PID=0x5678 USB_EVENT=any EXEC="/path/to/script"
+make load USB_DEVICES="1234:5678:eject" EXEC="/path/to/script"
 ```
 
-You can find the correct VID & PID of your device using:
+#### Trigger on any USB event (insert or remove)
+
+```bash
+make load USB_DEVICES="1234:5678:any" EXEC="/path/to/script"
+```
+
+#### Trigger on multiple devices at once
+
+```bash
+make load USB_DEVICES="1234:5678:insert,abcd:ef00:any" EXEC="/path/to/script"
+```
+
+#### Device Matching Modes: Whitelist vs. Blacklist
+
+Use the `WHITELIST` param:
+
+* `WHITELIST=1` → Only listed devices trigger the payload.
+* `WHITELIST=0` (default) → Listed devices are blocked, all others trigger.
+
+**Example:**
+
+```bash
+make load USB_DEVICES="1234:5678:any" WHITELIST=1 EXEC="/path/to/script"
+```
+
+#### Find Your Device VID & PID
+
+Use:
 
 ```bash
 lsusb
 ```
 
-#### ⚠️ Note on parameter validation and trigger behavior
+### ⚠️ Note on parameter validation and trigger behavior
 
-This project accepts dynamic configuration at load time via module parameters such as `PHRASE`, `EXEC`, `USB_VID`, `USB_PID`, and optionally `USB_EVENT` introduced in this commit, [`875ff0a`](https://github.com/0x48piraj/wrong8007/commit/875ff0a9a8f7aee6515918a857ce067a2416f78a).
+Dynamic configuration via the `usb_devices` module parameter was introduced and improved in commits [`7a6ab4d`](https://github.com/0x48piraj/wrong8007/commit/7a6ab4d428be8ce8ba9dbf6b8e187484362392d8) and [`4fd9648`](https://github.com/0x48piraj/wrong8007/commit/4fd96480dc4229787b9e9932b416e038b9cd1120), enabling runtime specification of USB device rules for fine-grained trigger control.
 
-To ensure correctness and avoid unexpected behavior:
+This replaces the legacy approach introduced in commit [`875ff0a`](https://github.com/0x48piraj/wrong8007/commit/875ff0a9a8f7aee6515918a857ce067a2416f78a).
 
-* The `Makefile` performs **basic validation** of required parameters and restricts `USB_EVENT` to valid values: `insert`, `eject`, or `any`.
-* If invalid or unsupported values are provided (e.g. `USB_EVENT=foobar`), and you're using the `Makefile`, it will **fail early** with a helpful message.
+* The module accepts USB device rules via the `usb_devices` module parameter as an **array of strings** in the format:
 
-> If `usb_vid` and `usb_pid` are not set, the USB trigger module **disables itself silently** and will not hook into USB events.
+  ```
+  VID:PID:EVENT
+  ```
 
-* However, if you're using `insmod` directly, you bypass the `Makefile` validation. In that case, it's your responsibility to ensure valid inputs.
+  where `EVENT` is one of `insert`, `eject`, or `any`.
 
-The kernel module does **not** include extensive runtime validation for invalid `USB_EVENT` values to avoid bloating the kernel with unnecessary checks.
+* Upon module load, these rules are **parsed and validated strictly**:
 
-This is an intentional design choice:
+  * Each rule is checked for correct hexadecimal VID and PID values.
+  * The event string is verified to be one of the supported values.
+  * Invalid or malformed rules cause the module initialization to fail with clear error messages.
 
-- **Lightweight kernel code**
-- **Controlled from user space**
-- **Sanity checks enforced via build tooling**
+* If no valid USB device rules are provided, the USB trigger disables itself silently and does **not** register for USB event notifications.
 
-**Summary**:
+* This rigorous validation ensures that only well-formed configurations are accepted, avoiding undefined or unexpected behavior at runtime.
 
-* Use the `Makefile` → gets validated.
-* Use `insmod` manually → know what you're doing.
+* Users must provide valid rules; incorrect inputs will prevent module load.
+
+#### Design Rationale
+
+* **Validation is performed in the kernel module on load**, ensuring invalid configurations are rejected immediately.
+
+* This balances **robustness and safety** with kernel code simplicity.
+
+* The module avoids runtime overhead of repeated checks by validating once during initialization.
+
+* Users should still carefully prepare module parameters (e.g. via scripts or tooling) to avoid load failures.
 
 ## Network-Based Triggers
 
