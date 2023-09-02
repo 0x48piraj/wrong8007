@@ -6,7 +6,19 @@ Inspired by the legendary [USBKill](https://github.com/hephaest0s/usbkill) proje
 
 Whether that's securely nuking sensitive files, cutting network links, or triggering custom defense scripts - it's in your control.
 
-In an era where whistleblowers have faced retaliation, journalists have operated under surveillance, and corporate misconduct has been quietly buried, *Wrong Boot* gives you a way to act - instantly, irreversibly, and on your terms.
+In a world where knockless raids are real, truths vanish into evidence lockers, and silence is bought with fear - Wrong Boot isn't just a tool. It's last words. A line you draw before someone else crosses it. When the moment comes, it won't ask questions. It just acts exactly how you told it to.
+
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/d5a0bb9e-a23e-46f8-af5f-bb8e01277dca" alt="demo gif">
+</p>
+
+<p align="center">
+  <a href="#usage">Installation</a>
+  &nbsp;&nbsp;&nbsp;•&nbsp;&nbsp;&nbsp;
+  <a href="#usage">Usage</a>
+  &nbsp;&nbsp;&nbsp;•&nbsp;&nbsp;&nbsp;
+  <a href="docs/DESIGN.md">Philosophy</a>
+</p>
 
 > **Disclaimer:** This project is for educational and lawful defensive purposes only. Using it to damage systems you don't own or have permission to modify is illegal.
 
