@@ -20,6 +20,16 @@ struct usb_dev_rule {
     enum { USB_EVT_INSERT, USB_EVT_EJECT, USB_EVT_ANY } event;
 };
 
+// Table of valid USB events and their enum values
+static const struct {
+    const char *name;
+    int value;
+} evt_map[] = {
+    { "insert", USB_EVT_INSERT },
+    { "eject",  USB_EVT_EJECT  },
+    { "any",    USB_EVT_ANY    },
+};
+
 // Storage for parsed rules
 static struct usb_dev_rule usb_rules[MAX_USB_DEVICES];
 static int usb_rule_count;
@@ -38,42 +48,47 @@ MODULE_PARM_DESC(usb_devices, "VID:PID:EVENT (EVENT=insert|eject|any)");
 // Declare the external exec_work from main module
 extern struct work_struct exec_work;
 
-// Notifier forward declaration
-static struct notifier_block usb_nb;
-
 // Parse module param usb_devices[] into structured rules
 static int parse_usb_devices(void)
 {
-    int i;
-    for (i = 0; i < usb_devices_count && i < MAX_USB_DEVICES; i++) {
+    int i, j;
+    int limit = min(usb_devices_count, MAX_USB_DEVICES);
+
+    for (i = 0; i < limit; i++) {
         unsigned int vid, pid;
+        char buf[64];         // local bounded copy of param string
         char evt_str[16] = "any"; // default: "any", can be "eject" or "insert"
-        int n = sscanf(usb_devices[i], "%x:%x:%15s", &vid, &pid, evt_str);
+        int n;
+
+        // Ensure bounded copy of the module param string
+        strscpy(buf, usb_devices[i], sizeof(buf));
+
+        n = sscanf(buf, "%x:%x:%15s", &vid, &pid, evt_str);
         if (n < 2) {
-            pr_err("wrong8007: Invalid USB rule '%s'\n", usb_devices[i]);
+            pr_err("wrong8007: Invalid USB rule '%s'\n", buf);
             return -EINVAL;
         }
 
         usb_rules[usb_rule_count].vid = (u16)vid;
         usb_rules[usb_rule_count].pid = (u16)pid;
 
-        if (!strcmp(evt_str, "insert"))
-            usb_rules[usb_rule_count].event = USB_EVT_INSERT;
-        else if (!strcmp(evt_str, "eject"))
-            usb_rules[usb_rule_count].event = USB_EVT_EJECT;
-        else if (!strcmp(evt_str, "any"))
-            usb_rules[usb_rule_count].event = USB_EVT_ANY;
-        else {
-            pr_err("wrong8007: Unknown event '%s' in rule '%s'\n",
-                evt_str, usb_devices[i]);
-            return -EINVAL;
+        // Map event string to enum
+        for (j = 0; j < ARRAY_SIZE(evt_map); j++) {
+            if (!strcmp(evt_str, evt_map[j].name)) {
+                usb_rules[usb_rule_count].event = evt_map[j].value;
+                goto valid_event;
+            }
         }
 
+        pr_err("wrong8007: Unknown event '%s' in rule '%s'\n", evt_str, buf);
+        return -EINVAL;
+
+valid_event:
         pr_info("wrong8007: rule[%d] VID=0x%04x PID=0x%04x EVENT=%s\n",
                 usb_rule_count, vid, pid, evt_str);
-
         usb_rule_count++;
     }
+
     return 0;
 }
 
