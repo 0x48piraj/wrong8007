@@ -52,13 +52,14 @@ static int kbd_cb(struct notifier_block *nb, unsigned long action, void *data)
     const char *key_str;
     char key;
 
+    // Skip key release or invalid index
     if (!p->down || p->value >= ARRAY_SIZE(us_keymap))
         return NOTIFY_OK;
 
-    key_str = p->shift ? us_keymap[p->value][1] : us_keymap[p->value][0];
+    key_str = us_keymap[p->value][p->shift ? 1 : 0];
 
     // Skip if special key (length != 1)
-    if (!key_str || key_str[1] != '\0') return NOTIFY_OK;
+    if (strlen(key_str) != 1) return NOTIFY_OK;
 
     // Match only printable single chars
     key = key_str[0];
