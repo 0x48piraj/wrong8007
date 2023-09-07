@@ -24,7 +24,7 @@ char *phrase_buf;
 extern struct work_struct exec_work;
 
 // Simplified US keymap
-static const char *us_keymap[][2] = {
+static const char us_keymap[][2][8] = {
     {"\0", "\0"}, {"[ESC]", "[ESC]"}, {"1", "!"}, {"2", "@"},
     {"3", "#"}, {"4", "$"}, {"5", "%"}, {"6", "^"},
     {"7", "&"}, {"8", "*"}, {"9", "("}, {"0", ")"},
