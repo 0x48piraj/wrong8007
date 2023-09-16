@@ -57,7 +57,7 @@ Wrong Boot's architecture keeps **triggers** separate from the **core logic**, m
                    └─────────────────────────┘
 ```
 
-For example, the keyboard trigger (`trigger/keyboard.c`) listens for a secret phrase; if it matches, it runs your configured executable instantly. Other triggers (USB, network) work independently - load the module with any combination you need.
+For example, the keyboard trigger (`trigger/keyboard.c`) listens for a secret phrase and instantly runs your configured executable when matched. Other triggers (USB, network) work independently - load the module with any combination you need.
 
 You can read more about the project's design philosophy [here](docs/DESIGN.md).
 
@@ -109,6 +109,30 @@ At last, installing the kernel module,
     $ make remove   # Remove the module
     $ make clean    # Optional: clean build artifacts
 ```
+
+## Keyboard-Based Trigger
+
+The `wrong8007` module can trigger actions when a specific **phrase** is typed on the keyboard.
+
+* **Case-sensitive** matching. `"nuke"` is different from `"NUKE"`.
+* Matches **exactly** as typed, without ignoring spaces or punctuation.
+* Works only on **printable characters** (no special keys like Shift or Ctrl).
+
+### Usage
+
+Load the module with the desired trigger phrase:
+
+```bash
+make load PHRASE="nuke" EXEC="/path/to/script"
+```
+
+The configured script will run immediately after the phrase is typed in sequence.
+
+#### Limitations
+
+* Works with the **US keymap only**.
+* Requires the phrase to be typed **without mistakes** - any wrong key resets the match.
+* Does not capture keys from virtual keyboards or remote sessions.
 
 ## USB-Based Triggers
 
@@ -190,6 +214,8 @@ This replaces the legacy approach introduced in commit [`875ff0a`](https://githu
 * If no valid USB device rules are provided, the USB trigger disables itself silently and does **not** register for USB event notifications.
 
 * This rigorous validation ensures that only well-formed configurations are accepted, avoiding undefined or unexpected behavior at runtime.
+
+* `usb_notifier_callback()` schedules work once per USB event so we don't need to dedup for correctness.
 
 * Users must provide valid rules; incorrect inputs will prevent module load.
 
@@ -371,7 +397,7 @@ Here are some great options - all open-source, well-documented, and actively use
 
 * Designed to securely erase data by writing special patterns.
 * Implements several sanitization methods from well-known standards.
-* Simple to integrate into automated scripts — minimal dependencies.
+* Simple to integrate into automated scripts - minimal dependencies.
 * Good middle-ground between the simplicity of `shred` and the full-disk capabilities of `nwipe`.
 
 ### 4. **[scrub](https://linux.die.net/man/1/scrub)**
