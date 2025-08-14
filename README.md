@@ -36,26 +36,9 @@ The design of this project was intentionally made modular to allow for customiza
 
 Wrong Boot's architecture keeps **triggers** separate from the **core logic**, making it easy to add or remove trigger types without touching the core.
 
-```
-                   ┌─────────────────────────┐
-                   │        wrong8007        │
-                   │      Kernel Module      │
-                   └────────────┬────────────┘
-                                │
-         ┌──────────────────────┼──────────────────────┐
-         │                      │                      │
- ┌───────▼────────┐     ┌───────▼─────────┐    ┌───────▼─────────┐
- │ Keyboard       │     │ USB Events      │    │ Network         │
- │ Trigger        │     │ Trigger         │    │ Trigger         │
- └───────┬────────┘     └───────┬─────────┘    └───────┬─────────┘
-         │                      │                      │
-         └───────────────┬──────┴──────┬───────────────┘
-                         │             │
-                   ┌─────▼─────────────▼─────┐
-                   │        EXEC Hook        │
-                   │  (script or binary run) │
-                   └─────────────────────────┘
-```
+<p align="center">
+  <img width="708" height="440" alt="Image" src="https://github.com/user-attachments/assets/d0bb5624-77b1-45d7-bff8-8adb7a45859a" alt="system architecture" />
+</p>
 
 For example, the keyboard trigger (`trigger/keyboard.c`) listens for a secret phrase and instantly runs your configured executable when matched. Other triggers (USB, network) work independently - load the module with any combination you need.
 
@@ -412,6 +395,44 @@ Here are some great options - all open-source, well-documented, and actively use
 **Pro tip:**
 
 You're not limited to just one. For example, your network trigger could run `scrub` for a quick device wipe, while your USB trigger calls `nwipe` for a thorough multi-pass destruction.
+
+## Roadmap
+
+This checklist outlines what's been completed so far and what still needs to be addressed.
+
+- [x] Functionally complete
+  - [x] Performs all core tasks reliably (e.g., all triggers work as intended)
+  - [x] Handles edge cases (e.g., timeout conditions, invalid input)
+
+- [x] Documented
+  - [x] **README** explains purpose, setup, usage, and caveats
+  - [x] Example commands, options, and expected behavior are clear
+  - [x] Module parameters and triggers are well-explained
+
+- [x] Configurable and extensible
+  - [x] Users can add or combine triggers easily
+  - [x] Clear boundaries between core logic and pluggable parts (e.g., USB/network)
+
+- [ ] Tested or testable
+  - [ ] Demonstrates functionality in multiple environments or under stress
+  - [ ] Includes safety mechanisms (e.g., no accidental wipes, warnings for common mistakes)
+
+- [ ] No obvious bugs or kernel warnings
+  - [x] Loads/unloads cleanly
+  - [x] No kernel panics
+  - [ ] `dmesg` pollution
+
+- [ ] Stable and versioned
+  - [ ] At least one tagged release (e.g., v1.0.0)
+  - [x] Changelog is maintained
+
+- [x] Logging levels or debug modes for safe testing
+- [ ] Optional dry-run modes or mock environments
+- [ ] Security hardening (e.g., restrict who can insert the module)
+- [ ] Packaging
+  - [ ] DKMS support
+  - [ ] Polished Makefile
+  - [ ] Install/uninstall scripts
 
 ## What's Next
 
