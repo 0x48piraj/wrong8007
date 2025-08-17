@@ -2,7 +2,7 @@
 /*
  * wrong8007: shared definitions, data structures, and function prototypes
  *
- * Copyright (c) 2023, Piyush Raj (https://piyushraj.org/)
+ * Copyright (c) 2023, 03C0 (https://03c0.net/)
  */
 #ifndef WRONG8007_H
 #define WRONG8007_H

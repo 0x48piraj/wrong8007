@@ -2,7 +2,7 @@
 /*
  * wrong8007
  *
- * Copyright (c) 2023, Piyush Raj (https://piyushraj.org/)
+ * Copyright (c) 2023, 03C0 (https://03c0.net/)
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of version 2 of the GNU General Public License as
