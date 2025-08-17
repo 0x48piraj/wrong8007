@@ -54,10 +54,3 @@ reload: remove default load
 clean:
 	$(MAKE) -C $(KDIR) M=$(PWD) clean
 	rm -f *.ko *.mod.* *.o Module.symvers modules.order
-
-# Test target for CI / multi-kernel builds
-test:
-ifndef KERNEL_VERSION
-	$(error KERNEL_VERSION is not set)
-endif
-	$(MAKE) -C /usr/src/linux-headers-$(KERNEL_VERSION) M=$(PWD) modules
