@@ -1,0 +1,62 @@
+name: Feature Request
+description: Suggest a new trigger or improvement for wrong8007 kernel module
+title: "[Feature]: "
+labels: ["feature"]
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        # Feature Request for wrong8007 Kernel Module
+        Thank you for suggesting upgrades! Please provide as much detail as possible.
+
+  - type: input
+    id: feature-name
+    attributes:
+      label: Name
+      description: Short title for the requested feature or trigger
+      placeholder: "Heartbeat-based network trigger"
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: Describe the feature and what it should do
+      placeholder: "The module should trigger a script if a host stops sending packets for a certain interval."
+
+  - type: textarea
+    id: use-case
+    attributes:
+      label: Usecase
+      description: Explain why this feature is useful
+      placeholder: "Useful for monitoring hosts or remote kill-switch functionality."
+
+  - type: dropdown
+    id: trigger-type
+    attributes:
+      label: Trigger Type
+      description: Which type of trigger does this feature relate to?
+      options:
+        - "Keyboard"
+        - "USB"
+        - "Network"
+        - "Other / Custom"
+    validations:
+      required: true
+
+  - type: textarea
+    id: implementation-notes
+    attributes:
+      label: Implementation Notes
+      description: Optional suggestions for how the feature might be implemented
+      placeholder: "Might add support in trigger list, follow existing load parameter patterns."
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional Context
+      description: Any other context or references
+      placeholder: "Link to RFC, Linux kernel documentation, or similar modules."

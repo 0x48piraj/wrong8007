@@ -1,0 +1,91 @@
+name: Bug Report
+description: Report a bug to help improve the wrong8007 kernel module
+title: "[Bug]: "
+labels: ["bug"]
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        # Bug Report for wrong8007 Kernel Module
+        Thank you for reporting a bug! This helps us improve the module for all supported kernels.
+
+  - type: input
+    id: kernel-version
+    attributes:
+      label: Kernel Version
+      description: Which kernel version are you running wrong8007 on?
+      placeholder: "6.6.14"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Bug Severity
+      description: How severe is this bug?
+      options:
+        - "Low - Minor inconvenience"
+        - "Medium - Affects trigger behavior"
+        - "High - Blocks module functionality"
+        - "Critical - Module unusable or kernel crash"
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Bug Description
+      description: What were you trying to do when this bug occurred?
+      placeholder: "I tried to trigger the keyboard phrase 'nuke' and nothing happened."
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps-to-reproduce
+    attributes:
+      label: Steps to Reproduce
+      description: Detailed steps to reproduce the bug
+      placeholder: |
+        1. Load the module with `make load PHRASE="nuke" EXEC="/tmp/trigger_test.log"`
+        2. Type the phrase 'nuke'
+        3. Observe that the trigger does not execute
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected-behavior
+    attributes:
+      label: Expected Behavior
+      description: What should have happened?
+      placeholder: "The trigger script should have executed and logged the event to /tmp/trigger_test.log"
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual-behavior
+    attributes:
+      label: Actual Behavior
+      description: What actually happened?
+      placeholder: "Nothing happened, or dmesg shows an error."
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / dmesg output
+      description: Copy any kernel logs or errors
+      placeholder: |
+        [ 1234.567890] wrong8007: Trigger failed for keyboard phrase 'nuke'
+
+  - type: checkboxes
+    id: triggers-used
+    attributes:
+      label: Active Triggers
+      description: Which triggers were loaded when the bug occurred?
+      options:
+        - label: "Keyboard Trigger"
+        - label: "USB Trigger"
+        - label: "Network Trigger"
