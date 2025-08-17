@@ -2,7 +2,7 @@ obj-m := wrong8007.o
 wrong8007-objs := core.o trigger/keyboard.o trigger/usb.o trigger/network.o
 KDIR := /usr/lib/modules/$(shell uname -r)/build
 PWD := $(shell pwd)
-ccflags-y += -I$(PWD)/include
+ccflags-y += -I$(src)/include
 
 # Default target: build the module
 default:
