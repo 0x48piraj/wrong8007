@@ -1,6 +1,7 @@
 name: wrong8007 build routine
 
 on:
+  workflow_dispatch:
   push:
     branches: [ master ]
     paths:
