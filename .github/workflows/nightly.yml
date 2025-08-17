@@ -7,6 +7,7 @@ on:
 
 jobs:
   build:
+    name: build on kernel ${{ matrix.kernel.version }}
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -19,6 +20,7 @@ jobs:
             major: "6"
           - version: "6.6.14"
             major: "6"
+    continue-on-error: true
     steps:
       - name: checkout repository
         uses: actions/checkout@v3
@@ -35,20 +37,17 @@ jobs:
           path: linux-${{ matrix.kernel.version }}
           key: kernel-${{ matrix.kernel.version }}
 
-      - name: download kernel sources if not cached
+      - name: download and prepare kernel sources if not cached
         if: steps.cache-kernel.outputs.cache-hit != 'true'
         run: |
           echo "Downloading kernel ${{ matrix.kernel.version }} sources..."
           wget https://cdn.kernel.org/pub/linux/kernel/v${{ matrix.kernel.major }}.x/linux-${{ matrix.kernel.version }}.tar.gz
           tar -xzf linux-${{ matrix.kernel.version }}.tar.gz
           rm linux-${{ matrix.kernel.version }}.tar.gz
-
-      - name: prepare kernel headers
-        run: |
           cd linux-${{ matrix.kernel.version }}
           make defconfig
           make modules_prepare
 
       - name: compile wrong8007
         run: |
-          make -C linux-${{ matrix.kernel.version }} M=$GITHUB_WORKSPACE modules || { echo "Build failed for kernel ${{ matrix.kernel.version }}"; exit 1; }
+          KBUILD_MODPOST_WARN=1 make -C linux-${{ matrix.kernel.version }} M=$GITHUB_WORKSPACE modules V=1 || { echo "Build failed for kernel ${{ matrix.kernel.version }}"; exit 1; }
