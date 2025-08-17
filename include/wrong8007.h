@@ -7,8 +7,11 @@
 #ifndef WRONG8007_H
 #define WRONG8007_H
 
+#include <linux/kernel.h>
+#include <linux/module.h>
 #include <linux/workqueue.h>
 
+// Declare the external exec_work from core module
 extern struct work_struct exec_work;
 extern char *phrase_buf;
 extern char *exec_buf;

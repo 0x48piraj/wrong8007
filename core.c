@@ -16,8 +16,6 @@
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, see <https://www.gnu.org/licenses/>.
  */
-#include <linux/kernel.h>
-#include <linux/module.h>
 #include <linux/slab.h>
 #include <linux/kmod.h>
 
@@ -60,6 +58,7 @@ static char *env[] = {
  */
 static void do_exec_work(struct work_struct *w)
 {
+    int ret;
     struct subprocess_info *info;
     const char *argv[4] = { "/bin/sh", "-c", exec_buf, NULL };
 
@@ -69,7 +68,7 @@ static void do_exec_work(struct work_struct *w)
         return;
     }
 
-    int ret = call_usermodehelper_exec(info, UMH_WAIT_PROC);
+    ret = call_usermodehelper_exec(info, UMH_WAIT_PROC);
     pr_info("wrong8007: exec returned %d\n", ret);
 }
 

@@ -4,8 +4,6 @@
  *
  * Copyright (c) 2023, 03C0 (https://03c0.net/)
  */
-#include <linux/kernel.h>
-#include <linux/module.h>
 #include <linux/usb.h>
 #include <linux/string.h>
 
@@ -44,9 +42,6 @@ static char *usb_devices[MAX_USB_DEVICES];
 static int usb_devices_count;
 module_param_array(usb_devices, charp, &usb_devices_count, 0000);
 MODULE_PARM_DESC(usb_devices, "VID:PID:EVENT (EVENT=insert|eject|any)");
-
-// Declare the external exec_work from main module
-extern struct work_struct exec_work;
 
 // Parse module param usb_devices[] into structured rules
 static int parse_usb_devices(void)

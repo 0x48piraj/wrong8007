@@ -4,11 +4,10 @@
  *
  * Copyright (c) 2023, 03C0 (https://03c0.net/)
  */
-#include <linux/kernel.h>
-#include <linux/module.h>
 #include <linux/keyboard.h>
 #include <linux/notifier.h>
 #include <linux/string.h>
+#include <linux/slab.h>
 
 #include <wrong8007.h>
 
@@ -19,9 +18,6 @@ MODULE_PARM_DESC(phrase, "Keyboard input to trigger on (e.g., 'nuke')");
 
 // Internal storage of module params
 char *phrase_buf;
-
-// Declare the external exec_work from main module
-extern struct work_struct exec_work;
 
 // Simplified US keymap
 static const char us_keymap[][2][8] = {

