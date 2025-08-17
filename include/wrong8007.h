@@ -7,16 +7,16 @@
 #ifndef WRONG8007_H
 #define WRONG8007_H
 
-#include <linux/workqueue.h>
-
-extern struct work_struct exec_work;
-extern char *phrase_buf;
-extern char *exec_buf;
+/* API for triggers to schedule a userspace exec */
+void wrong8007_schedule_exec(const char *cmd);
 
 struct wrong8007_trigger {
     const char *name;
     int (*init)(void);
     void (*exit)(void);
+
+    /* Optional per-trigger exec command (module_param storage) */
+    const char *exec_cmd;
 };
 
 #endif
