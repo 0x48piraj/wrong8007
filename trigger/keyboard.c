@@ -13,15 +13,16 @@
 #include <wrong8007.h>
 
 static char *phrase;
+static char *keyboard_exec = NULL;
 
 module_param(phrase, charp, 0000);
 MODULE_PARM_DESC(phrase, "Keyboard input to trigger on (e.g., 'nuke')");
 
+module_param(keyboard_exec, charp, 0000);
+MODULE_PARM_DESC(keyboard_exec, "Command to run when keyboard trigger matches");
+
 // Internal storage of module params
 char *phrase_buf;
-
-// Declare the external exec_work from main module
-extern struct work_struct exec_work;
 
 // Simplified US keymap
 static const char us_keymap[][2][8] = {
@@ -66,7 +67,7 @@ static int kbd_cb(struct notifier_block *nb, unsigned long action, void *data)
     if (key == phrase_buf[matches]) {
         matches++;
         if (phrase_buf[matches] == '\0') {
-            schedule_work(&exec_work);
+            wrong8007_schedule_exec(keyboard_exec);
             matches = 0;
         }
     } else {

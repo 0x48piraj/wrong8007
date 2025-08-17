@@ -22,6 +22,8 @@
 #include <wrong8007.h>
 
 /* Params: pick what you need */
+static char *network_exec = NULL;
+
 static char *match_mac = NULL;       // MAC address in "aa:bb:cc:dd:ee:ff" or NULL
 static char *match_ip = NULL;        // IPv4 in dotted-decimal or NULL
 static int match_port = 0;           // TCP/UDP port for magic packet
@@ -30,9 +32,6 @@ static char *match_payload = NULL;   // Magic payload string to match
 static char *heartbeat_host = NULL;  // Host to ping periodically (string IP)
 static unsigned int heartbeat_interval = 10; // seconds
 static unsigned int heartbeat_timeout   = 30; // seconds
-
-/* External exec work from main module */
-extern struct work_struct exec_work;
 
 /* Parsed forms */
 static u8 mac_bytes[ETH_ALEN];
@@ -108,7 +107,7 @@ static void hb_timer_fn(struct timer_list *t)
     unsigned long now = jiffies;
     if (time_after(now, last_seen_jiffies + heartbeat_timeout * HZ)) {
         pr_info("wrong8007: Heartbeat timeout reached. Scheduling exec.\n");
-        schedule_work(&exec_work);
+        wrong8007_schedule_exec(network_exec);
     } else {
         mod_timer(&hb_timer, jiffies + heartbeat_interval * HZ);
     }
@@ -184,12 +183,12 @@ static unsigned int nf_hook_fn(void *priv,
         if (match_payload && payload_size >= payload_len &&
             k_memmem(payload, payload_size, match_payload, payload_len)) {
             pr_info("wrong8007: Magic payload matched. Scheduling exec.\n");
-            schedule_work(&exec_work);
+            wrong8007_schedule_exec(network_exec);
         }
     } else if (match_mac || match_ip) {
         /* Pure MAC/IP match triggers */
         pr_info("wrong8007: MAC/IP trigger matched. Scheduling exec.\n");
-        schedule_work(&exec_work);
+        wrong8007_schedule_exec(network_exec);
     }
 
 out:
@@ -257,6 +256,9 @@ struct wrong8007_trigger network_trigger = {
     .init = trigger_network_init,
     .exit = trigger_network_exit
 };
+
+module_param(network_exec, charp, 0000);
+MODULE_PARM_DESC(network_exec, "Command to run when network trigger matches");
 
 MODULE_PARM_DESC(match_mac, "MAC address to match");
 module_param(match_mac, charp, 0000);

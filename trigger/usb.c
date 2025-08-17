@@ -45,8 +45,10 @@ static int usb_devices_count;
 module_param_array(usb_devices, charp, &usb_devices_count, 0000);
 MODULE_PARM_DESC(usb_devices, "VID:PID:EVENT (EVENT=insert|eject|any)");
 
-// Declare the external exec_work from main module
-extern struct work_struct exec_work;
+// Per-trigger exec module param
+static char *usb_exec = NULL;
+module_param(usb_exec, charp, 0000);
+MODULE_PARM_DESC(usb_exec, "Command to run when USB trigger matches");
 
 // Parse module param usb_devices[] into structured rules
 static int parse_usb_devices(void)
@@ -119,7 +121,7 @@ static int usb_notifier_callback(struct notifier_block *self, unsigned long acti
 
     if ((usb_whitelist && !matched) || (!usb_whitelist && matched)) {
         pr_info("wrong8007: USB trigger fired (VID=0x%04x PID=0x%04x)\n", vid, pid);
-        schedule_work(&exec_work);
+        wrong8007_schedule_exec(usb_exec);
     }
 
     return NOTIFY_OK;
