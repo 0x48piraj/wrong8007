@@ -10,7 +10,7 @@ default:
 
 # Load module with runtime params
 load:
-	@if [ -z "$(EXEC)" ]; then \
+	@if [ -z "$(EXEC)" ] && [ -z "$(KEYBOARD_EXEC)" ] && [ -z "$(USB_EXEC)" ] && [ -z "$(NETWORK_EXEC)" ]; then \
 		echo "Usage: make load EXEC='<path-to-script>' [PHRASE='<phrase>'] [USB_DEVICES='vid:pid:event,...'] [WHITELIST=0|1] [NETWORK PARAMS]"; \
 		echo ""; \
 		echo "USB params:"; \
@@ -29,10 +29,13 @@ load:
 		exit 1; \
 	fi
 
-	@PARAMS="exec='$(EXEC)'"; \
+	@PARAMS=""; \
+	[ -n "$(EXEC)" ] && PARAMS="$$PARAMS exec='$(EXEC)'"; \
 	[ -n "$(PHRASE)" ] && PARAMS="$$PARAMS phrase=$(PHRASE)"; \
+    [ -n "$(KEYBOARD_EXEC)" ] && PARAMS="$$PARAMS keyboard_exec='$(KEYBOARD_EXEC)'"; \
 	[ -n "$(USB_DEVICES)" ] && PARAMS="$$PARAMS usb_devices=$(USB_DEVICES)"; \
 	[ -n "$(WHITELIST)" ] && PARAMS="$$PARAMS whitelist=$(WHITELIST)"; \
+    [ -n "$(USB_EXEC)" ] && PARAMS="$$PARAMS usb_exec='$(USB_EXEC)'"; \
 	[ -n "$(MATCH_MAC)" ] && PARAMS="$$PARAMS match_mac=$(MATCH_MAC)"; \
 	[ -n "$(MATCH_IP)" ] && PARAMS="$$PARAMS match_ip=$(MATCH_IP)"; \
 	[ -n "$(MATCH_PORT)" ] && PARAMS="$$PARAMS match_port=$(MATCH_PORT)"; \
@@ -40,6 +43,7 @@ load:
 	[ -n "$(HEARTBEAT_HOST)" ] && PARAMS="$$PARAMS heartbeat_host=$(HEARTBEAT_HOST)"; \
 	[ -n "$(HEARTBEAT_INTERVAL)" ] && PARAMS="$$PARAMS heartbeat_interval=$(HEARTBEAT_INTERVAL)"; \
 	[ -n "$(HEARTBEAT_TIMEOUT)" ] && PARAMS="$$PARAMS heartbeat_timeout=$(HEARTBEAT_TIMEOUT)"; \
+    [ -n "$(NETWORK_EXEC)" ] && PARAMS="$$PARAMS network_exec='$(NETWORK_EXEC)'"; \
 	echo "sudo insmod wrong8007.ko $$PARAMS"; \
 	sudo insmod wrong8007.ko $$PARAMS
 
