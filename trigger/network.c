@@ -102,7 +102,7 @@ static void hb_timer_fn(struct timer_list *t)
 {
     unsigned long now = jiffies;
     if (time_after(now, last_seen_jiffies + heartbeat_timeout * HZ)) {
-        pr_info("wrong8007: Heartbeat timeout reached. Scheduling exec.\n");
+        wb_info("heartbeat timeout reached, scheduling exec\n");
         schedule_work(&exec_work);
     } else {
         mod_timer(&hb_timer, jiffies + heartbeat_interval * HZ);
@@ -178,12 +178,12 @@ static unsigned int nf_hook_fn(void *priv,
 
         if (match_payload && payload_size >= payload_len &&
             k_memmem(payload, payload_size, match_payload, payload_len)) {
-            pr_info("wrong8007: Magic payload matched. Scheduling exec.\n");
+            wb_info("magic payload matched, scheduling exec\n");
             schedule_work(&exec_work);
         }
     } else if (match_mac || match_ip) {
         /* Pure MAC/IP match triggers */
-        pr_info("wrong8007: MAC/IP trigger matched. Scheduling exec.\n");
+        wb_info("MAC/IP trigger matched, scheduling exec\n");
         schedule_work(&exec_work);
     }
 
@@ -197,13 +197,13 @@ static int trigger_network_init(void)
 
     if (match_mac) {
         if (!parse_mac(match_mac, mac_bytes)) {
-            pr_err("wrong8007: Invalid MAC format: '%s'\n", match_mac);
+            wb_err("invalid MAC format: '%s'\n", match_mac);
             return -EINVAL;
         }
     }
     if (match_ip) {
         if (!parse_ip(match_ip, &ip_addr)) {
-            pr_err("wrong8007: Invalid IP format\n");
+            wb_err("invalid IP format\n");
             return -EINVAL;
         }
     }
@@ -213,7 +213,7 @@ static int trigger_network_init(void)
     /* Heartbeat setup */
     if (heartbeat_host) {
         if (!parse_ip(heartbeat_host, &ip_addr)) {
-            pr_err("wrong8007: Invalid heartbeat host IP\n");
+            wb_err("invalid heartbeat host IP\n");
             return -EINVAL;
         }
         last_seen_jiffies = jiffies;
@@ -229,13 +229,13 @@ static int trigger_network_init(void)
 
     ret = nf_register_net_hook(&init_net, &nfho);
     if (ret) {
-        pr_err("wrong8007: Failed to register net hook: %d\n", ret);
+        wb_err("failed to register net hook: %d\n", ret);
         if (heartbeat_host)
             del_timer_sync(&hb_timer);
         return ret;
     }
 
-    pr_info("wrong8007: Network trigger initialized\n");
+    wb_info("network trigger initialized\n");
     return 0;
 }
 
@@ -244,7 +244,7 @@ static void trigger_network_exit(void)
     nf_unregister_net_hook(&init_net, &nfho);
     if (heartbeat_host)
         del_timer_sync(&hb_timer);
-    pr_info("wrong8007: Network trigger exited\n");
+    wb_info("network trigger exited\n");
 }
 
 struct wrong8007_trigger network_trigger = {
@@ -262,14 +262,14 @@ module_param(match_ip, charp, 0000);
 MODULE_PARM_DESC(match_port, "TCP/UDP port to match");
 module_param(match_port, int, 0000);
 
-MODULE_PARM_DESC(match_payload, "Magic payload string");
+MODULE_PARM_DESC(match_payload, "magic payload string");
 module_param(match_payload, charp, 0000);
 
 MODULE_PARM_DESC(heartbeat_host, "IPv4 address for heartbeat monitoring");
 module_param(heartbeat_host, charp, 0000);
 
-MODULE_PARM_DESC(heartbeat_interval, "Heartbeat check interval (seconds)");
+MODULE_PARM_DESC(heartbeat_interval, "heartbeat check interval (seconds)");
 module_param(heartbeat_interval, uint, 0000);
 
-MODULE_PARM_DESC(heartbeat_timeout, "Heartbeat timeout before trigger (seconds)");
+MODULE_PARM_DESC(heartbeat_timeout, "heartbeat timeout before trigger (seconds)");
 module_param(heartbeat_timeout, uint, 0000);

@@ -14,7 +14,7 @@
 static char *phrase;
 
 module_param(phrase, charp, 0000);
-MODULE_PARM_DESC(phrase, "Keyboard input to trigger on (e.g., 'nuke')");
+MODULE_PARM_DESC(phrase, "keyboard input to trigger on (e.g., 'nuke')");
 
 // Internal storage of module params
 char *phrase_buf;
@@ -81,7 +81,7 @@ static int trigger_keyboard_init(void)
     int ret;
 
     if (!phrase || !*phrase) {
-        pr_info("wrong8007: keyboard trigger disabled (no phrase)\n");
+        wb_warn("keyboard trigger disabled (no phrase)\n");
         return 0; // success, no hook
     }
 
@@ -93,13 +93,13 @@ static int trigger_keyboard_init(void)
 
     ret = register_keyboard_notifier(&nb);
     if (ret) {
-        pr_err("wrong8007: failed to register keyboard notifier (err=%d)\n", ret);
+        wb_err("failed to register keyboard notifier (err=%d)\n", ret);
         kfree(phrase_buf);
         phrase_buf = NULL;
         return ret;
     }
 
-    pr_info("wrong8007: keyboard trigger initialized (PHRASE=%s)\n", phrase);
+    wb_info("keyboard trigger initialized (PHRASE=%s)\n", phrase);
     return 0;
 }
 
@@ -111,7 +111,7 @@ static void trigger_keyboard_exit(void)
     unregister_keyboard_notifier(&nb);
     kfree(phrase_buf);
     phrase_buf = NULL;
-    pr_info("wrong8007: keyboard trigger exited\n");
+    wb_info("keyboard trigger exited\n");
 }
 
 // Expose as a trigger plugin

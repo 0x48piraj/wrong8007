@@ -60,7 +60,7 @@ static int parse_usb_devices(void)
 
         n = sscanf(buf, "%x:%x:%15s", &vid, &pid, evt_str);
         if (n < 2) {
-            pr_err("wrong8007: Invalid USB rule '%s'\n", buf);
+            wb_err("invalid USB rule '%s'\n", buf);
             return -EINVAL;
         }
 
@@ -75,11 +75,11 @@ static int parse_usb_devices(void)
             }
         }
 
-        pr_err("wrong8007: Unknown event '%s' in rule '%s'\n", evt_str, buf);
+        wb_err("unknown event '%s' in rule '%s'\n", evt_str, buf);
         return -EINVAL;
 
 valid_event:
-        pr_info("wrong8007: rule[%d] VID=0x%04x PID=0x%04x EVENT=%s\n",
+        wb_dbg("rule[%d] VID=0x%04x PID=0x%04x EVENT=%s\n",
                 usb_rule_count, vid, pid, evt_str);
         usb_rule_count++;
     }
@@ -113,7 +113,7 @@ static int usb_notifier_callback(struct notifier_block *self, unsigned long acti
     bool matched = match_rules(vid, pid, action);
 
     if ((usb_whitelist && !matched) || (!usb_whitelist && matched)) {
-        pr_info("wrong8007: USB trigger fired (VID=0x%04x PID=0x%04x)\n", vid, pid);
+        wb_info("USB trigger fired (VID=0x%04x PID=0x%04x)\n", vid, pid);
         schedule_work(&exec_work);
     }
 
@@ -132,12 +132,12 @@ static int trigger_usb_init(void)
         return ret;
 
     if (usb_rule_count == 0) {
-        pr_info("wrong8007: USB trigger disabled (No USB rules)\n");
+        wb_warn("USB trigger disabled (no USB rules)\n");
         return 0; // success, but no hook
     }
 
     usb_register_notify(&usb_nb);
-    pr_info("wrong8007: USB trigger initialized in %s mode (%d rules)\n",
+    wb_info("USB trigger initialized in %s mode (%d rules)\n",
             usb_whitelist ? "whitelist" : "blacklist", usb_rule_count);
     return 0; // in recent kernels, usb_register_notify returns void
 }
@@ -146,7 +146,7 @@ static void trigger_usb_exit(void)
 {
     if (usb_rule_count > 0)
         usb_unregister_notify(&usb_nb);
-    pr_info("wrong8007: USB trigger exited\n");
+    wb_info("USB trigger exited\n");
 }
 
 // Expose as trigger plugin

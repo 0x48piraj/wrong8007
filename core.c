@@ -69,7 +69,7 @@ static void do_exec_work(struct work_struct *w)
     }
 
     ret = call_usermodehelper_exec(info, UMH_WAIT_PROC);
-    pr_info("wrong8007: exec returned %d\n", ret);
+    wb_dbg("exec returned %d\n", ret);
 }
 
 /*
@@ -96,7 +96,7 @@ static int __init wrong8007_init(void)
         }
     }
 
-    pr_info("wrong8007: loaded\n");
+    wb_info("loaded\n");
     return 0;
 
 fail:
@@ -118,7 +118,7 @@ static void __exit wrong8007_exit(void)
 
     flush_work(&exec_work);
     kfree(exec_buf);
-    pr_info("wrong8007: unloaded\n");
+    wb_info("unloaded\n");
 }
 
 module_init( wrong8007_init );
