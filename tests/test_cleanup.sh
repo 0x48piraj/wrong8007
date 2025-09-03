@@ -2,7 +2,7 @@
 # tests/test_cleanup.sh
 # Verify that the wrong8007 module releases all resources after unload
 
-set -e
+set -euo pipefail
 
 MODULE_NAME="wrong8007"
 TEST_EXEC="./tests/test_exec.sh"
@@ -74,7 +74,7 @@ fi
 # Inspect dmesg for memory leaks or errors
 echo "[*] Checking dmesg for module-related errors..."
 if sudo dmesg | grep -i "$MODULE_NAME" | grep -iE "leak|error"; then
-    echo "[!] Errors or warnings found in dmesg!"
+    echo "[!] Errors or leaks found in dmesg!"
     exit 1
 else
     echo "[+] No errors found in dmesg."
