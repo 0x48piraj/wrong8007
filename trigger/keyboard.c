@@ -56,7 +56,7 @@ static int kbd_cb(struct notifier_block *nb, unsigned long action, void *data)
     key_str = us_keymap[p->value][p->shift ? 1 : 0];
 
     // Skip if special key (length != 1)
-    if (strlen(key_str) != 1) return NOTIFY_OK;
+    if (!key_str[0] || key_str[1]) return NOTIFY_OK;
 
     // Match only printable single chars
     key = key_str[0];
