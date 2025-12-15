@@ -138,41 +138,69 @@ static unsigned int nf_hook_fn(void *priv,
     u8 *payload;
     unsigned int payload_size;
 
-    eth = eth_hdr(skb);
-
-    /* MAC match */
-    if (match_mac && !ether_addr_equal(mac_bytes, eth->h_source))
+    /* L3 / IPv4 only */
+    if (skb->protocol != htons(ETH_P_IP))
         goto out;
 
-    if (skb->protocol != htons(ETH_P_IP))
+    /* Ensure IP header */
+    if (!pskb_may_pull(skb, sizeof(struct iphdr)))
         goto out;
 
     iph = ip_hdr(skb);
 
-    /* IP match */
-    if (match_ip && iph->saddr != ip_addr)
+    /* L2 / MAC match */
+    if (match_mac) {
+        if (!skb_mac_header_was_set(skb))
+            goto out;
+
+        eth = eth_hdr(skb);
+        if (!ether_addr_equal(mac_bytes, eth->h_source))
+            goto out;
+    }
+
+    /* L3 / IP match */
+    if (match_ip && iph->saddr != match_ip_addr)
         goto out;
 
     /* Heartbeat tracking */
-    if (heartbeat_host && iph->saddr == ip_addr)
+    if (heartbeat_host && iph->saddr == heartbeat_ip_addr)
         last_seen_jiffies = jiffies;
 
-    /* Port + payload match */
+    /* L4 / Payload matching */
     if (match_port || match_payload) {
+
+        if (!pskb_may_pull(skb, skb->len))
+            goto out;
+
         if (iph->protocol == IPPROTO_TCP) {
-            tcph = (struct tcphdr *)((__u32 *)iph + iph->ihl);
-            if (match_port && ntohs(tcph->source) != match_port &&
+            tcph = (struct tcphdr *)((u8 *)iph + iph->ihl * 4);
+
+            if (tcph->doff * 4 < sizeof(struct tcphdr))
+                goto out;
+
+            if (match_port &&
+                ntohs(tcph->source) != match_port &&
                 ntohs(tcph->dest) != match_port)
                 goto out;
+
             payload = (u8 *)tcph + tcph->doff * 4;
-            payload_size = skb_tail_pointer(skb) - (unsigned char *)payload;
+            payload_size = skb->len - (payload - skb->data);
+
         } else if (iph->protocol == IPPROTO_UDP) {
-            udph = (struct udphdr *)((__u32 *)iph + iph->ihl);
-            if (match_port && ntohs(udph->source) != match_port &&
+            udph = (struct udphdr *)((u8 *)iph + iph->ihl * 4);
+
+            payload_size = ntohs(udph->len);
+            if (payload_size < sizeof(struct udphdr))
+                goto out;
+
+            if (match_port &&
+                ntohs(udph->source) != match_port &&
                 ntohs(udph->dest) != match_port)
                 goto out;
+
             payload = (u8 *)udph + sizeof(struct udphdr);
-            payload_size = ntohs(udph->len) - sizeof(struct udphdr);
+            payload_size -= sizeof(struct udphdr);
+
         } else {
             goto out;
         }
@@ -182,6 +210,7 @@ static unsigned int nf_hook_fn(void *priv,
             wb_info("magic payload matched, scheduling exec\n");
             schedule_work(&exec_work);
         }
+
     } else if (match_mac || match_ip) {
         /* Pure MAC/IP match triggers */
         wb_info("MAC/IP trigger matched, scheduling exec\n");
