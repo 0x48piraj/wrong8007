@@ -4,6 +4,7 @@
  *
  * Copyright (c) 2023, 03C0 (https://03c0.net/)
  */
+
 #include <linux/usb.h>
 #include <linux/string.h>
 
