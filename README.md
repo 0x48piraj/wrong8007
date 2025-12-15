@@ -21,7 +21,7 @@ When the moment comes, **`wrong8007`** won't ask questions. It will act exactly 
   &nbsp;&nbsp;&nbsp;•&nbsp;&nbsp;&nbsp;
   <a href="docs/security-model.md">Security model</a>
   &nbsp;&nbsp;&nbsp;•&nbsp;&nbsp;&nbsp;
-  <a href="docs/design.md">Philosophy</a>
+  <a href="docs/manifesto.md">Philosophy</a>
 </p>
 
 > **Disclaimer:** This project is for educational and lawful defensive purposes only. Using it to damage systems you don't own or have permission to modify is illegal.
@@ -47,7 +47,7 @@ Wrong Boot's architecture keeps **triggers** separate from the **core logic**, m
 
 For example, the keyboard trigger (`trigger/keyboard.c`) listens for a secret phrase and instantly runs your configured executable when matched. Other triggers (USB, network) work independently - load the module with any combination you need.
 
-You can read more about the project's design philosophy [here](docs/design.md). For trust boundaries and non-goals, see the [security model](docs/security_model.md).
+You can read more about the project's design philosophy [here](docs/manifesto.md). For trust boundaries and non-goals, see the [security model](docs/security-model.md).
 
 ## Usage
 
@@ -298,7 +298,7 @@ New trigger implementations are welcome and encouraged.
 
 Before contributing, please read:
 - [Development guide](docs/development.md)
-- [Security model](docs/security_model.md)
+- [Security model](docs/security-model.md)
 
 PRs that violate the project's trust boundaries or safety guarantees will not be accepted.
 

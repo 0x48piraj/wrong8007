@@ -7,7 +7,7 @@ It assumes familiarity with:
 - Linux kernel development
 - Loadable Kernel Modules (LKM)
 - Basic kernel subsystems (notifiers, netfilter, USB, etc.)
-- Project's [design philosophy](design.md) and [security model](security_model.md).
+- Project's [design philosophy](design.md) and [security model](security-model.md).
 
 Payload behavior and forensic considerations are intentionally out of scope for this document. See [Data destruction & Wiping rationale](dd.md) for guidance on wipe strategies.
 

@@ -6,7 +6,7 @@ This document defines the **explicit security boundaries, guarantees, and non-go
 
 It exists to prevent ambiguity, misuse, and incorrect assumptions by users, auditors, and contributors.
 
-For architectural context, see [design philosophy](design.md). For implementation details, see [development guide](development.md).
+For architectural context, see [design philosophy](manifesto.md). For implementation details, see [development guide](development.md).
 
 ## Threat model
 

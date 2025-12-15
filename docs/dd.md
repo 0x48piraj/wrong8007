@@ -1,5 +1,4 @@
-
-## The world of nuking!
+# The world of nuking!
 
 This document explains the **theoretical and practical basis** for data destruction payloads commonly used with `wrong8007`.
 
@@ -13,7 +12,7 @@ This is optional reading for users, but recommended for those designing high-ris
 
 You can TOTALLY ignore it but if you're a forensic nerd, shall we?
 
-#### "The Urban Legend of Multipass Hard Disk Overwrite" and DoD 5220-22-M
+## "The Urban Legend of Multipass Hard Disk Overwrite" and DoD 5220-22-M
 
 In 1996, Peter Gutmann presented a paper ([`GUT96`](http://www.cs.auckland.ac.nz/~pgut001/pubs/secure_del.htm)) at a USENIX Security Symposium in which he claimed that overwritten data could be recovered using [magnetic force microscopy (MFM)](https://en.wikipedia.org/wiki/Magnetic_force_microscope) and [scanning tunneling microscopy (STM)](https://en.wikipedia.org/wiki/Scanning_tunneling_microscope) techniques.
 
@@ -33,11 +32,11 @@ However, in the context of current HDD technology, there are several problems wi
 
 > And that's how Gutmann's work resulted in the formation of an urban legend: that the US government requires a 3-pass overwrite and specifies it in DoD 5220-22-M.
 
-#### What about those often-cited US Government standards?
+## What about those often-cited US Government standards?
 
 There are many HDD overwrite standards from which to choose ([`BLAN08`](http://www.dataerasure.com/recognized_overwriting_standards.htm)). Among those that are often cited in both procurement and product specifications are DoD 5220.22-M and NSA 130-1. Less often cited, but more current, is NIST SP 800-88.
 
-#### DoD 5220-22-M
+### DoD 5220-22-M
 
 DoD 5220-22-M is the National Industrial Security Program Operating Manual (NISPOM), which a broad manual of procedures and requirements for government contractors handling classified information.
 
@@ -45,7 +44,7 @@ The 1997 version of this document ([`DOD_97`](http://www.usaid.gov/policy/ads/50
 
 Indeed, the entire table of clearing and sanitization methods is no longer present in the current issue of NISPOM ([`DOD_06`](http://www.dss.mil/isp/odaa/documents/nispom2006-5220.pdf)).
 
-#### NSA 130-1
+### NSA 130-1
 
 NSA 130-1 may well have specified a clearing or sanitization procedure by writing a random character, another random character, and then a known value. However, I am not able to find a copy of NSA Manual 130-1 or 130-2 (perhaps they were classified documents).
 
@@ -53,7 +52,7 @@ However, the current issue of the NSA/CSS Storage Device Declassification Manual
 
 It is not clear to me if the DoD and NSA no longer recommend overwrite methods because they are ineffective or because their effectiveness as a single technique is uncertain when applied to a variety of HDD technologies.
 
-#### NIST Special Publication 800-88
+### NIST Special Publication 800-88
 
 The National Institute of Standards and Technology has a special publication "Guidelines for Media Sanitization" that allows HDD clearing by overwriting media "using agency-approved and validated overwriting technologies/methods/tools".
 
@@ -63,13 +62,13 @@ The original issue of SP 800-88 ([`NIST06-1`](http://web.archive.org/web/2006090
 
 Most interestingly, SP 800-88 states that "NSA has researched that one overwrite is good enough to sanitize most drives". Unfortunately, the NSA's research does not appear to have been published for public consumption. Read more [here](http://www.fylrr.com/archives.php?doc=NISTSP800-88_rev1.pdf) and over [NISTSP800-88_with-errata](https://dwaves.de/wp-content/uploads/2013/09/NISTSP800-88_with-errata.pdf).
 
-#### Recent research (kinda, sorta...)
+## Prior work
 
 Several security researchers presented a paper ([`WRIG08`](http://www.springerlink.com/content/408263ql11460147/)) at the Fourth International Conference on Information Systems Security (ICISS 2008) that declares the "great wiping controversy" about how many passes of overwriting with various data values to be settled: their research demonstrates that a single overwrite using an arbitrary data value will render the original data irretrievable even if MFM and STM techniques are employed.
 
 The researchers found that the probability of recovering a single bit from a previously used HDD was **only slightly better than a coin toss**, and that the probability of recovering more bits **decreases exponentially** so that it quickly becomes close to zero.
 
-#### Therefore, a single pass overwrite with any arbitrary value (randomly chosen or not) is sufficient to render the original HDD data effectively irretrievable."
+**Therefore, a single pass overwrite with any arbitrary value (randomly chosen or not) is sufficient to render the original HDD data effectively irretrievable."**
 
 ## Extend with battle-tested data destruction utilities
 
