@@ -32,7 +32,8 @@ static unsigned int heartbeat_timeout   = 30; // seconds
 
 /* Parsed forms */
 static u8 mac_bytes[ETH_ALEN];
-static __be32 ip_addr = 0;
+static __be32 match_ip_addr = 0;
+static __be32 heartbeat_ip_addr = 0;
 static size_t payload_len = 0;
 
 /* Netfilter hook */
@@ -232,7 +233,7 @@ static int trigger_network_init(void)
         }
     }
     if (match_ip) {
-        if (!parse_ip(match_ip, &ip_addr)) {
+        if (!parse_ip(match_ip, &match_ip_addr)) {
             wb_err("invalid IP format\n");
             return -EINVAL;
         }
@@ -242,7 +243,7 @@ static int trigger_network_init(void)
 
     /* Heartbeat setup */
     if (heartbeat_host) {
-        if (!parse_ip(heartbeat_host, &ip_addr)) {
+        if (!parse_ip(heartbeat_host, &heartbeat_ip_addr)) {
             wb_err("invalid heartbeat host IP\n");
             return -EINVAL;
         }
