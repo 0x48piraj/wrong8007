@@ -36,7 +36,7 @@ load:
 	[ -n "$(MATCH_MAC)" ] && PARAMS="$$PARAMS match_mac=$(MATCH_MAC)"; \
 	[ -n "$(MATCH_IP)" ] && PARAMS="$$PARAMS match_ip=$(MATCH_IP)"; \
 	[ -n "$(MATCH_PORT)" ] && PARAMS="$$PARAMS match_port=$(MATCH_PORT)"; \
-	[ -n "$(MATCH_PAYLOAD)" ] && PARAMS="$$PARAMS match_payload='$(MATCH_PAYLOAD)'"; \
+	[ -n "$(MATCH_PAYLOAD)" ] && PARAMS="$$PARAMS match_payload=$(MATCH_PAYLOAD)"; \
 	[ -n "$(HEARTBEAT_HOST)" ] && PARAMS="$$PARAMS heartbeat_host=$(HEARTBEAT_HOST)"; \
 	[ -n "$(HEARTBEAT_INTERVAL)" ] && PARAMS="$$PARAMS heartbeat_interval=$(HEARTBEAT_INTERVAL)"; \
 	[ -n "$(HEARTBEAT_TIMEOUT)" ] && PARAMS="$$PARAMS heartbeat_timeout=$(HEARTBEAT_TIMEOUT)"; \
