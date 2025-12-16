@@ -20,7 +20,7 @@
 
 #include <wrong8007.h>
 
-/* Params: pick what you need */
+/* Module params */
 static char *match_mac = NULL;       // MAC address in "aa:bb:cc:dd:ee:ff" or NULL
 static char *match_ip = NULL;        // IPv4 in dotted-decimal or NULL
 static int match_port = 0;           // TCP/UDP port for magic packet
@@ -42,6 +42,8 @@ static struct nf_hook_ops nfho;
 /* Heartbeat tracking */
 static struct timer_list hb_timer;
 static unsigned long last_seen_jiffies;
+
+static DEFINE_SPINLOCK(hb_lock);
 
 /* Parse MAC address in formats:
  *   aa:bb:cc:dd:ee:ff
@@ -99,11 +101,18 @@ static bool parse_ip(const char *ip_str, __be32 *out)
 #endif
 }
 
-/* Heartbeat timer handler */
+/* Heartbeat timer handler: read last_seen_jiffies under lock */
 static void hb_timer_fn(struct timer_list *t)
 {
     unsigned long now = jiffies;
-    if (time_after(now, last_seen_jiffies + heartbeat_timeout * HZ)) {
+    unsigned long last;
+    unsigned long flags;
+
+    spin_lock_irqsave(&hb_lock, flags);
+    last = last_seen_jiffies;
+    spin_unlock_irqrestore(&hb_lock, flags);
+
+    if (time_after(now, last + heartbeat_timeout * HZ)) {
         wb_info("heartbeat timeout reached, scheduling exec\n");
         schedule_work(&exec_work);
     } else {
@@ -138,20 +147,37 @@ static unsigned int nf_hook_fn(void *priv,
     struct udphdr *udph;
     u8 *payload;
     unsigned int payload_size;
+    unsigned int iph_len;
+    size_t offset;
 
     /* L3 / IPv4 only */
     if (skb->protocol != htons(ETH_P_IP))
         goto out;
 
-    /* Ensure IP header */
+    /* Ensure we can read the base IP header */
     if (!pskb_may_pull(skb, sizeof(struct iphdr)))
         goto out;
 
     iph = ip_hdr(skb);
 
-    /* L2 / MAC match */
+    /* Validate IP header length (IHL: 4-byte words, min 5) */
+    if (iph->ihl < 5)
+        goto out;
+
+    iph_len = iph->ihl * 4;
+
+    /* Ensure complete IP header is available linearly */
+    if (!pskb_may_pull(skb, iph_len))
+        goto out;
+
+    iph = ip_hdr(skb); /* refresh pointer after pskb_may_pull */
+
+    /* L2 / MAC match: validate MAC header before using eth_hdr() */
     if (match_mac) {
-        if (!skb_mac_header_was_set(skb))
+        if (!skb_mac_header_was_set(skb) || skb->mac_len < ETH_HLEN)
+            goto out;
+
+        if (!pskb_may_pull(skb, ETH_HLEN))
             goto out;
 
         eth = eth_hdr(skb);
@@ -163,35 +189,59 @@ static unsigned int nf_hook_fn(void *priv,
     if (match_ip && iph->saddr != match_ip_addr)
         goto out;
 
-    /* Heartbeat tracking */
-    if (heartbeat_host && iph->saddr == heartbeat_ip_addr)
+    /* Heartbeat tracking: update last_seen_jiffies under lock */
+    if (heartbeat_host && iph->saddr == heartbeat_ip_addr) {
+        unsigned long flags;
+        spin_lock_irqsave(&hb_lock, flags);
         last_seen_jiffies = jiffies;
+        spin_unlock_irqrestore(&hb_lock, flags);
+    }
 
     /* L4 / Payload matching */
     if (match_port || match_payload) {
 
-        if (!pskb_may_pull(skb, skb->len))
+        /* Ensure at least the entire skb linear region up to IP length is present */
+        if (!pskb_may_pull(skb, iph_len))
             goto out;
 
         if (iph->protocol == IPPROTO_TCP) {
-            tcph = (struct tcphdr *)((u8 *)iph + iph->ihl * 4);
-
-            if (tcph->doff * 4 < sizeof(struct tcphdr))
+            /* Ensure minimal TCP header is available */
+            if (!pskb_may_pull(skb, iph_len + sizeof(struct tcphdr)))
                 goto out;
+
+            tcph = (struct tcphdr *)((u8 *)iph + iph_len);
+
+            /* Validate TCP header length (doff is 32-bit words, min 5) */
+            if (tcph->doff < 5)
+                goto out;
+
+            /* Ensure entire TCP header is present */
+            if (!pskb_may_pull(skb, iph_len + tcph->doff * 4))
+                goto out;
+
+            tcph = (struct tcphdr *)((u8 *)iph + iph_len); /* refresh */
 
             if (match_port &&
                 ntohs(tcph->source) != match_port &&
                 ntohs(tcph->dest) != match_port)
                 goto out;
 
+            /* Compute payload pointer/size safely */
             payload = (u8 *)tcph + tcph->doff * 4;
-            payload_size = skb->len - (payload - skb->data);
+            offset = payload - (u8 *)skb->data;
+            if (offset > skb->len)
+                goto out;
+            payload_size = skb->len - offset;
 
         } else if (iph->protocol == IPPROTO_UDP) {
-            udph = (struct udphdr *)((u8 *)iph + iph->ihl * 4);
+            /* Ensure minimal UDP header is available */
+            if (!pskb_may_pull(skb, iph_len + sizeof(struct udphdr)))
+                goto out;
 
-            payload_size = ntohs(udph->len);
-            if (payload_size < sizeof(struct udphdr))
+            udph = (struct udphdr *)((u8 *)iph + iph_len);
+
+            /* UDP length from header (network order) */
+            if (ntohs(udph->len) < sizeof(struct udphdr))
                 goto out;
 
             if (match_port &&
@@ -199,8 +249,18 @@ static unsigned int nf_hook_fn(void *priv,
                 ntohs(udph->dest) != match_port)
                 goto out;
 
+            /* Ensure the entire UDP datagram as reported is available */
+            if (!pskb_may_pull(skb, iph_len + ntohs(udph->len)))
+                goto out;
+
+            udph = (struct udphdr *)((u8 *)iph + iph_len); /* refresh */
+
             payload = (u8 *)udph + sizeof(struct udphdr);
-            payload_size -= sizeof(struct udphdr);
+            offset = payload - (u8 *)skb->data;
+            if (offset > skb->len)
+                goto out;
+            /* UDP len includes UDP header */
+            payload_size = ntohs(udph->len) - sizeof(struct udphdr);
 
         } else {
             goto out;
@@ -238,8 +298,15 @@ static int trigger_network_init(void)
             return -EINVAL;
         }
     }
-    if (match_payload)
+    if (match_payload) {
         payload_len = strlen(match_payload);
+        /* Ignore empty payload string to avoid matching every packet */
+        if (payload_len == 0) {
+            wb_warn("empty payload string, ignoring payload match\n");
+            match_payload = NULL;
+            payload_len = 0;
+        }
+    }
 
     /* Heartbeat setup */
     if (heartbeat_host) {
