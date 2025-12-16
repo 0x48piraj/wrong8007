@@ -4,6 +4,7 @@
  *
  * Copyright (c) 2023, 03C0 (https://03c0.net/)
  */
+
 #ifndef WRONG8007_H
 #define WRONG8007_H
 
@@ -25,7 +26,6 @@
 
 // Declare the external exec_work from core module
 extern struct work_struct exec_work;
-extern char *phrase_buf;
 extern char *exec_buf;
 
 struct wrong8007_trigger {

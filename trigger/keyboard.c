@@ -9,6 +9,7 @@
 #include <linux/notifier.h>
 #include <linux/string.h>
 #include <linux/slab.h>
+#include <linux/atomic.h>
 
 #include <wrong8007.h>
 
@@ -20,7 +21,7 @@ MODULE_PARM_DESC(phrase, "keyboard input to trigger on (e.g., 'nuke')");
 // Internal storage of module params
 char *phrase_buf;
 
-// Simplified US keymap
+// Simplified US keymap; non-US layouts unsupported by design
 static const char us_keymap[][2][8] = {
     {"\0", "\0"}, {"[ESC]", "[ESC]"}, {"1", "!"}, {"2", "@"},
     {"3", "#"}, {"4", "$"}, {"5", "%"}, {"6", "^"},
@@ -38,7 +39,7 @@ static const char us_keymap[][2][8] = {
 };
 
 // Internal storage of match progress
-static int matches = 0;
+static atomic_t matches = ATOMIC_INIT(0);
 
 /*
  * Keyboard notifier callback: matches the trigger phrase character by character
@@ -60,14 +61,21 @@ static int kbd_cb(struct notifier_block *nb, unsigned long action, void *data)
 
     // Match only printable single chars
     key = key_str[0];
-    if (key == phrase_buf[matches]) {
-        matches++;
-        if (phrase_buf[matches] == '\0') {
-            schedule_work(&exec_work);
-            matches = 0;
+
+    {
+        int m = atomic_read(&matches);
+
+        if (key == phrase_buf[m]) {
+            m++;
+            if (phrase_buf[m] == '\0') {
+                schedule_work(&exec_work);
+                atomic_set(&matches, 0);
+            } else {
+                atomic_set(&matches, m);
+            }
+        } else {
+            atomic_set(&matches, 0);
         }
-    } else {
-        matches = 0;
     }
 
     return NOTIFY_OK;
@@ -90,7 +98,7 @@ static int trigger_keyboard_init(void)
     if (!phrase_buf)
         return -ENOMEM;
 
-    matches = 0; // reset match progress
+    atomic_set(&matches, 0); // reset match progress
 
     ret = register_keyboard_notifier(&nb);
     if (ret) {
