@@ -24,14 +24,12 @@
 #define wb_warn(fmt, ...) pr_warn(WB_TAG fmt, ##__VA_ARGS__)
 #define wb_err(fmt, ...)  pr_err(WB_TAG fmt, ##__VA_ARGS__)
 
-// Declare the external exec_work from core module
-extern struct work_struct exec_work;
-extern char *exec_buf;
-
 struct wrong8007_trigger {
     const char *name;
     int (*init)(void);
     void (*exit)(void);
 };
+
+void wrong8007_activate(void);
 
 #endif

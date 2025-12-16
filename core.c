@@ -19,6 +19,7 @@
 
 #include <linux/slab.h>
 #include <linux/kmod.h>
+#include <linux/atomic.h>
 
 #include <wrong8007.h>
 
@@ -30,10 +31,13 @@ static char *exec;
 module_param(exec, charp, 0000);
 
 // Internal storage of module params
-char *exec_buf;
+static char *exec_buf;
 
 // Deferred work to run userspace helper
 struct work_struct exec_work;
+
+// Execution policy state
+static atomic_t exec_armed = ATOMIC_INIT(1);
 
 // Exported trigger list
 extern struct wrong8007_trigger keyboard_trigger;
@@ -74,6 +78,23 @@ static void do_exec_work(struct work_struct *w)
 }
 
 /*
+ * Authorize execution of the configured action by trigger
+ * backends when their activation condition is satisfied.
+ *
+ * Only the first caller while execution is armed will schedule
+ * the deferred work; all subsequent calls are ignored.
+ *
+ */
+void wrong8007_activate(void)
+{
+    /* Fire exactly once */
+    if (atomic_cmpxchg(&exec_armed, 1, 0) == 1) {
+        wb_info("execution triggered\n");
+        schedule_work(&exec_work);
+    }
+}
+
+/*
  * Module init: duplicate input params, register notifier, init work
  */
 static int __init wrong8007_init(void)
@@ -86,6 +107,9 @@ static int __init wrong8007_init(void)
     if (!exec_buf) {
         return -ENOMEM;
     }
+
+    // Re-arm once at module load
+    atomic_set(&exec_armed, 1);
 
     INIT_WORK(&exec_work, do_exec_work);
 

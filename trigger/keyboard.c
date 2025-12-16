@@ -73,7 +73,7 @@ static int kbd_cb(struct notifier_block *nb, unsigned long action, void *data)
     if (key == phrase_buf[matches]) {
         matches++;
         if (phrase_buf[matches] == '\0') {
-            schedule_work(&exec_work);
+            wrong8007_activate();
             matches = 0;
         }
     } else {

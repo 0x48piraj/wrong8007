@@ -115,7 +115,7 @@ static int usb_notifier_callback(struct notifier_block *self, unsigned long acti
 
     if ((usb_whitelist && !matched) || (!usb_whitelist && matched)) {
         wb_info("USB trigger fired (VID=0x%04x PID=0x%04x)\n", vid, pid);
-        schedule_work(&exec_work);
+        wrong8007_activate();
     }
 
     return NOTIFY_OK;

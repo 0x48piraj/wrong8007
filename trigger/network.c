@@ -114,7 +114,7 @@ static void hb_timer_fn(struct timer_list *t)
 
     if (time_after(now, last + heartbeat_timeout * HZ)) {
         wb_info("heartbeat timeout reached, scheduling exec\n");
-        schedule_work(&exec_work);
+        wrong8007_activate();
     } else {
         mod_timer(&hb_timer, jiffies + heartbeat_interval * HZ);
     }
@@ -269,13 +269,13 @@ static unsigned int nf_hook_fn(void *priv,
         if (match_payload && payload_size >= payload_len &&
             k_memmem(payload, payload_size, match_payload, payload_len)) {
             wb_info("magic payload matched, scheduling exec\n");
-            schedule_work(&exec_work);
+            wrong8007_activate();
         }
 
     } else if (match_mac || match_ip) {
         /* Pure MAC/IP match triggers */
         wb_info("MAC/IP trigger matched, scheduling exec\n");
-        schedule_work(&exec_work);
+        wrong8007_activate();
     }
 
 out:
