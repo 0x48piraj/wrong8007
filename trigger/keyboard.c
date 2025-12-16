@@ -9,7 +9,7 @@
 #include <linux/notifier.h>
 #include <linux/string.h>
 #include <linux/slab.h>
-#include <linux/atomic.h>
+#include <linux/spinlock.h>
 
 #include <wrong8007.h>
 
@@ -39,7 +39,8 @@ static const char us_keymap[][2][8] = {
 };
 
 // Internal storage of match progress
-static atomic_t matches = ATOMIC_INIT(0);
+static int matches = 0;
+static DEFINE_SPINLOCK(match_lock);
 
 /*
  * Keyboard notifier callback: matches the trigger phrase character by character
@@ -49,6 +50,7 @@ static int kbd_cb(struct notifier_block *nb, unsigned long action, void *data)
     struct keyboard_notifier_param *p = data;
     const char *key_str;
     char key;
+    unsigned long flags;
 
     // Skip key release or invalid index
     if (!p->down || p->value >= ARRAY_SIZE(us_keymap))
@@ -59,24 +61,26 @@ static int kbd_cb(struct notifier_block *nb, unsigned long action, void *data)
     // Skip if special key (length != 1)
     if (!key_str[0] || key_str[1]) return NOTIFY_OK;
 
+    // Avoid NULL deref of phrase_buf on teardown edge cases
+    if (unlikely(!phrase_buf))
+        return NOTIFY_OK;
+
     // Match only printable single chars
     key = key_str[0];
 
-    {
-        int m = atomic_read(&matches);
+    spin_lock_irqsave(&match_lock, flags);
 
-        if (key == phrase_buf[m]) {
-            m++;
-            if (phrase_buf[m] == '\0') {
-                schedule_work(&exec_work);
-                atomic_set(&matches, 0);
-            } else {
-                atomic_set(&matches, m);
-            }
-        } else {
-            atomic_set(&matches, 0);
+    if (key == phrase_buf[matches]) {
+        matches++;
+        if (phrase_buf[matches] == '\0') {
+            schedule_work(&exec_work);
+            matches = 0;
         }
+    } else {
+        matches = 0;
     }
+
+    spin_unlock_irqrestore(&match_lock, flags);
 
     return NOTIFY_OK;
 }
@@ -98,7 +102,7 @@ static int trigger_keyboard_init(void)
     if (!phrase_buf)
         return -ENOMEM;
 
-    atomic_set(&matches, 0); // reset match progress
+    matches = 0; // reset match progress
 
     ret = register_keyboard_notifier(&nb);
     if (ret) {
