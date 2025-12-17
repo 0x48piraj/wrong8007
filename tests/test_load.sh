@@ -5,7 +5,7 @@
 set -euo pipefail
 
 MODULE_NAME="wrong8007.ko"
-PHRASE="dummy"
+PHRASE="nuke"
 
 echo "=== Runtime Test: Loading module ==="
 if sudo insmod $MODULE_NAME phrase="$PHRASE" exec="/bin/true"; then

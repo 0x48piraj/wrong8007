@@ -7,7 +7,7 @@ set -euo pipefail
 MODULE_NAME="wrong8007"
 TEST_EXEC="./tests/test_exec.sh"
 LOG_FILE="/tmp/trigger_test.log"
-PHRASE="dummy"
+PHRASE="nuke"
 
 echo "[*] Starting cleanup test..."
 
@@ -17,7 +17,7 @@ if [ ! -f "$TEST_EXEC" ]; then
     exit 1
 fi
 
-# Load the module with a dummy trigger
+# Load the module with a keyboard trigger
 echo "[*] Loading module with test exec..."
 make load PHRASE="$PHRASE" EXEC="$(realpath "$TEST_EXEC")"
 
