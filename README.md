@@ -320,7 +320,7 @@ This checklist outlines what's been completed so far and what still needs to be 
   - [x] Handles edge cases (e.g., timeout conditions, invalid input)
 
 - [x] Documented
-  - [x] **README** explains purpose, setup, usage, and caveats
+  - [x] Explain purpose, setup, usage, and caveats
   - [x] Example commands, options, and expected behavior are clear
   - [x] Module parameters and triggers are well-explained
 
@@ -337,8 +337,8 @@ This checklist outlines what's been completed so far and what still needs to be 
   - [x] No kernel panics
   - [ ] `dmesg` pollution
 
-- [ ] Stable and versioned
-  - [ ] At least one tagged release (e.g., v1.0.0)
+- [x] Stable and versioned
+  - [x] Tagged releases (e.g., v1.0.0)
   - [x] Changelog is maintained
 
 - [x] Logging levels or debug modes for safe testing
@@ -346,7 +346,7 @@ This checklist outlines what's been completed so far and what still needs to be 
 - [ ] Security hardening (e.g., restrict who can insert the module)
 - [ ] Packaging
   - [ ] DKMS support
-  - [ ] Polished Makefile
+  - [x] Makefile with runtime-configurable build flags
   - [ ] Install/uninstall scripts
 
 ## What's next
