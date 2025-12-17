@@ -50,6 +50,9 @@ static int parse_usb_devices(void)
     int i, j;
     int limit = min(usb_devices_count, MAX_USB_DEVICES);
 
+    if (usb_devices_count > MAX_USB_DEVICES)
+        wb_warn("USB rules truncated to %d entries\n", MAX_USB_DEVICES);
+
     for (i = 0; i < limit; i++) {
         unsigned int vid, pid;
         char buf[64];         // local bounded copy of param string

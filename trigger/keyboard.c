@@ -77,7 +77,7 @@ static int kbd_cb(struct notifier_block *nb, unsigned long action, void *data)
             matches = 0;
         }
     } else {
-        matches = 0;
+        matches = (key == phrase_buf[0]) ? 1 : 0;
     }
 
     spin_unlock_irqrestore(&match_lock, flags);

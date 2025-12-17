@@ -65,7 +65,7 @@ static struct wrong8007_trigger *triggers[] = {
 };
 
 // Minimal environment for shell execution
-static const char *env[] = {
+static char *env[] = {
     "HOME=/",
     "TERM=linux",
     "PATH=/sbin:/bin:/usr/sbin:/usr/bin",
