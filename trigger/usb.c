@@ -137,10 +137,10 @@ static int trigger_usb_init(void)
         return 0; // success, but no hook
     }
 
-    usb_register_notify(&usb_nb);
+    usb_register_notify(&usb_nb); // no return value on modern kernels
     wb_info("USB trigger initialized in %s mode (%d rules)\n",
             usb_whitelist ? "whitelist" : "blacklist", usb_rule_count);
-    return 0; // in recent kernels, usb_register_notify returns void
+    return 0;
 }
 
 static void trigger_usb_exit(void)

@@ -19,7 +19,7 @@ module_param(phrase, charp, 0000);
 MODULE_PARM_DESC(phrase, "keyboard input to trigger on (e.g., 'nuke')");
 
 // Internal storage of module params
-char *phrase_buf;
+static char *phrase_buf;
 
 // Simplified US keymap; non-US layouts unsupported by design
 static const char us_keymap[][2][8] = {
@@ -39,7 +39,7 @@ static const char us_keymap[][2][8] = {
 };
 
 // Internal storage of match progress
-static int matches = 0;
+static unsigned int matches;
 static DEFINE_SPINLOCK(match_lock);
 
 /*

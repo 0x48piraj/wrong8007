@@ -339,9 +339,9 @@ static int trigger_network_init(void)
 
 static void trigger_network_exit(void)
 {
-    nf_unregister_net_hook(&init_net, &nfho);
     if (heartbeat_host)
         del_timer_sync(&hb_timer);
+    nf_unregister_net_hook(&init_net, &nfho);
     wb_info("network trigger exited\n");
 }
 

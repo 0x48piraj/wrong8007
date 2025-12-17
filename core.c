@@ -34,7 +34,7 @@ module_param(exec, charp, 0000);
 static char *exec_buf;
 
 // Deferred work to run userspace helper
-struct work_struct exec_work;
+static struct work_struct exec_work;
 
 // Execution policy state
 static atomic_t exec_armed = ATOMIC_INIT(1);
@@ -44,6 +44,20 @@ extern struct wrong8007_trigger keyboard_trigger;
 extern struct wrong8007_trigger usb_trigger;
 extern struct wrong8007_trigger network_trigger;
 
+/*
+ * Trigger interface contract:
+ *
+ * - Triggers are owned and managed by the core module.
+ * - init() is called once at module load, in array order, and returns 0
+ *   on success or a negative errno on failure.
+ * - On partial init failure, exit() is called in reverse order for
+ *   triggers whose init() succeeded.
+ * - exit() is called once at module unload and must fully undo init().
+ * - Triggers must not call wrong8007_activate() from init() or exit().
+ * - Trigger callbacks may call wrong8007_activate() after init().
+ *
+ * This contract enforces fail-closed behavior and one-shot execution.
+ */
 static struct wrong8007_trigger *triggers[] = {
     &keyboard_trigger,
     &usb_trigger,
@@ -51,7 +65,7 @@ static struct wrong8007_trigger *triggers[] = {
 };
 
 // Minimal environment for shell execution
-static char *env[] = {
+static const char *env[] = {
     "HOME=/",
     "TERM=linux",
     "PATH=/sbin:/bin:/usr/sbin:/usr/bin",
@@ -69,10 +83,11 @@ static void do_exec_work(struct work_struct *w)
 
     info = call_usermodehelper_setup(argv[0], (char **)argv, env, GFP_KERNEL, NULL, NULL, NULL);
     if (!info) {
-        pr_err("wrong8007: helper setup failed\n");
+        wb_err("wrong8007: helper setup failed\n");
         return;
     }
 
+    /* Wait for completion to ensure one-shot semantics */
     ret = call_usermodehelper_exec(info, UMH_WAIT_PROC);
     wb_dbg("exec returned %d\n", ret);
 }
@@ -87,9 +102,7 @@ static void do_exec_work(struct work_struct *w)
  */
 void wrong8007_activate(void)
 {
-    /* Fire exactly once */
     if (atomic_cmpxchg(&exec_armed, 1, 0) == 1) {
-        wb_info("execution triggered\n");
         schedule_work(&exec_work);
     }
 }
@@ -116,7 +129,7 @@ static int __init wrong8007_init(void)
     for (i = 0; i < ARRAY_SIZE(triggers); i++) {
         err = triggers[i]->init();
         if (err) {
-            pr_err("wrong8007: failed to init trigger: %s\n", triggers[i]->name);
+            wb_err("wrong8007: failed to init trigger: %s\n", triggers[i]->name);
             goto fail;
         }
     }
