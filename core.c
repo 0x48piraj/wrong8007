@@ -24,6 +24,7 @@
 #include <wrong8007.h>
 
 #define REGISTER_TRIGGER(t) &t
+#define EXEC_MAX_LEN 4096
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("03C0");
@@ -69,7 +70,6 @@ static struct wrong8007_trigger *triggers[] = {
 // Minimal environment for shell execution
 static char *env[] = {
     "HOME=/",
-    "TERM=linux",
     "PATH=/sbin:/bin:/usr/sbin:/usr/bin",
     NULL
 };
@@ -115,8 +115,15 @@ void wrong8007_activate(void)
 static int __init wrong8007_init(void)
 {
     int i, err;
-    if (!exec || !*exec)
+    if (!exec || !*exec) {
+        wb_err("exec parameter required\n");
         return -EINVAL;
+    }
+
+    if (strnlen(exec, EXEC_MAX_LEN + 1) > EXEC_MAX_LEN) {
+        wb_err("exec parameter too long (max: %d)\n", EXEC_MAX_LEN);
+        return -EINVAL;
+    }
 
     exec_buf = kstrdup(exec, GFP_KERNEL);
     if (!exec_buf) {

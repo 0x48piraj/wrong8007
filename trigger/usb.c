@@ -59,6 +59,12 @@ static int parse_usb_devices(void)
         char evt_str[16] = "any"; // default: "any", can be "eject" or "insert"
         int n;
 
+        // Skip NULL or empty entries (unlikely but possible)
+        if (!usb_devices[i] || !*usb_devices[i]) {
+            wb_warn("skipping empty USB rule at index %d\n", i);
+            continue;
+        }
+
         // Ensure bounded copy of the module param string
         strscpy(buf, usb_devices[i], sizeof(buf));
 

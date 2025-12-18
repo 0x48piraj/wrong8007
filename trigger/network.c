@@ -121,11 +121,11 @@ static void hb_timer_fn(struct timer_list *t)
 }
 
 /*
- * Simple bounded substring search.
+ * Naive bounded substring search (O(n * m)).
  *
- * Payloads are typically short, so a hand-rolled search is sufficient.
- * This is kept intentionally generic, as the trigger framework allows
- * arbitrary payload matching rather than fixed-length tokens.
+ * Payloads are typically short (MTU-bounded), so a hand-rolled search is sufficient.
+ * This is kept intentionally simple, as more complex algorithms (KMP/BM)
+ * would add branches and state with no measurable benefit in this use case.
  */
 static void *k_memmem(const void *haystack, size_t haystack_len,
                       const void *needle, size_t needle_len)
