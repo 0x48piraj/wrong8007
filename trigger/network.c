@@ -120,6 +120,13 @@ static void hb_timer_fn(struct timer_list *t)
     }
 }
 
+/*
+ * Simple bounded substring search.
+ *
+ * Payloads are typically short, so a hand-rolled search is sufficient.
+ * This is kept intentionally generic, as the trigger framework allows
+ * arbitrary payload matching rather than fixed-length tokens.
+ */
 static void *k_memmem(const void *haystack, size_t haystack_len,
                       const void *needle, size_t needle_len)
 {
@@ -314,7 +321,9 @@ static int trigger_network_init(void)
             wb_err("invalid heartbeat host IP\n");
             return -EINVAL;
         }
+        spin_lock_irqsave(&hb_lock, flags);
         last_seen_jiffies = jiffies;
+        spin_unlock_irqrestore(&hb_lock, flags);
         timer_setup(&hb_timer, hb_timer_fn, 0);
         mod_timer(&hb_timer, jiffies + heartbeat_interval * HZ);
     }
@@ -339,9 +348,9 @@ static int trigger_network_init(void)
 
 static void trigger_network_exit(void)
 {
+    nf_unregister_net_hook(&init_net, &nfho);
     if (heartbeat_host)
         del_timer_sync(&hb_timer);
-    nf_unregister_net_hook(&init_net, &nfho);
     wb_info("network trigger exited\n");
 }
 
