@@ -47,6 +47,50 @@ Wrong Boot's architecture keeps **triggers** separate from the **core logic**, m
 
 For example, the keyboard trigger (`trigger/keyboard.c`) listens for a secret phrase and instantly runs your configured executable when matched. Other triggers (USB, network) work independently - load the module with any combination you need.
 
+### Execution model
+
+Wrong Boot enforces **strict ownership and layering** between triggers and execution.
+
+**Triggers detect conditions only.**
+
+They do *not* execute payloads, coordinate with each other, or own execution state.
+
+**The core module owns execution policy**, including:
+
+- One-shot execution semantics (exactly once)
+- First-trigger-wins behavior
+- Deferred execution via a `workqueue`
+- Clean re-arming on module reload
+
+All triggers interact with the core through a single stable API:
+
+```c
+wrong8007_activate();
+````
+
+Internally, this is implemented as a **one-shot latch**:
+
+```mermaid
+flowchart TB
+    Trigger[Trigger detects condition]
+    Core[Core execution policy]
+    Latch[One-shot latch]
+    Work[Deferred workqueue]
+
+    Trigger -->|request| Core
+    Core -->|authorize execution| Latch
+    Latch -->|consumed on first trigger| Work
+```
+
+This design provides:
+
+* Clear ownership boundaries
+* Fail-closed behavior
+* Predictable execution
+* Easier auditing and future extension
+
+Triggers can only *request* execution. The core decides *if and when* it happens.
+
 You can read more about the project's design philosophy [here](docs/manifesto.md). For trust boundaries and non-goals, see the [security model](docs/security-model.md).
 
 ## Usage
@@ -82,11 +126,11 @@ At last, installing the kernel module,
 
 #### 3. Load the module
 
-**Example:** run `wipe.sh` when the phrase `secret phrase` is typed.
+**Example:** run `tests/test_exec.sh` when the phrase `secret phrase` is typed.
 
 ```bash
-    $ chmod +x wipe.sh
-    $ test -f wipe.sh && make load PHRASE='secret phrase' EXEC="$(realpath wipe.sh)"
+    $ chmod +x tests/test_exec.sh
+    $ test -f tests/test_exec.sh && make load PHRASE='secret phrase' EXEC="$(realpath tests/test_exec.sh)"
 ```
 
 > The executable/script **must** have execute permissions (`chmod +x`) and use an absolute path.
@@ -332,10 +376,10 @@ This checklist outlines what's been completed so far and what still needs to be 
   - [ ] Demonstrates functionality in multiple environments or under stress
   - [ ] Includes safety mechanisms (e.g., no accidental wipes, warnings for common mistakes)
 
-- [ ] No obvious bugs or kernel warnings
+- [x] No obvious bugs or kernel warnings
   - [x] Loads/unloads cleanly
   - [x] No kernel panics
-  - [ ] `dmesg` pollution
+  - [x] `dmesg` pollution
 
 - [x] Stable and versioned
   - [x] Tagged releases (e.g., v1.0.0)

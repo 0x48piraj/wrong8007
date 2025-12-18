@@ -42,6 +42,8 @@ struct wrong8007_trigger {
 };
 ```
 
+> **Note:** Triggers must remain detection-only. **Execution policy** lives exclusively in the `core` module.
+
 ### Rules
 
 * `init()` must return 0 on success
@@ -64,8 +66,6 @@ This ensures:
 * Correct execution context
 * Safe interaction with kernel subsystems
 * Consistent behavior across triggers
-
-If one-shot semantics are desired, the core may guard execution with an atomic flag.
 
 ## Designing a new trigger
 
