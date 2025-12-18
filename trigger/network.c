@@ -321,6 +321,7 @@ static int trigger_network_init(void)
             wb_err("invalid heartbeat host IP\n");
             return -EINVAL;
         }
+        unsigned long flags;
         spin_lock_irqsave(&hb_lock, flags);
         last_seen_jiffies = jiffies;
         spin_unlock_irqrestore(&hb_lock, flags);

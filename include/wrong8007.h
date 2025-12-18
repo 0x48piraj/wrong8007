@@ -30,6 +30,7 @@ struct wrong8007_trigger {
     void (*exit)(void);
 };
 
+/* Safe to call from atomic / notifier context */
 void wrong8007_activate(void);
 
 #endif

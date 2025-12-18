@@ -23,6 +23,8 @@
 
 #include <wrong8007.h>
 
+#define REGISTER_TRIGGER(t) &t
+
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("03C0");
 MODULE_DESCRIPTION("wrong8007 is an equivalent of a burner phone");
@@ -59,9 +61,9 @@ extern struct wrong8007_trigger network_trigger;
  * This contract enforces fail-closed behavior and one-shot execution.
  */
 static struct wrong8007_trigger *triggers[] = {
-    &keyboard_trigger,
-    &usb_trigger,
-    &network_trigger
+    REGISTER_TRIGGER(keyboard_trigger),
+    REGISTER_TRIGGER(usb_trigger),
+    REGISTER_TRIGGER(network_trigger),
 };
 
 // Minimal environment for shell execution
@@ -83,7 +85,7 @@ static void do_exec_work(struct work_struct *w)
 
     info = call_usermodehelper_setup(argv[0], (char **)argv, env, GFP_KERNEL, NULL, NULL, NULL);
     if (!info) {
-        wb_err("wrong8007: helper setup failed\n");
+        wb_err("helper setup failed\n");
         return;
     }
 
@@ -121,7 +123,7 @@ static int __init wrong8007_init(void)
         return -ENOMEM;
     }
 
-    // Re-arm once at module load
+    // Explicitly re-arm execution on module load; redundant with static initialization but intentional
     atomic_set(&exec_armed, 1);
 
     INIT_WORK(&exec_work, do_exec_work);
