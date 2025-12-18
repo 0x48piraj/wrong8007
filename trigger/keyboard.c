@@ -52,8 +52,8 @@ static int kbd_cb(struct notifier_block *nb, unsigned long action, void *data)
     char key;
     unsigned long flags;
 
-    // Skip key release or invalid index
-    if (!p->down || p->value >= ARRAY_SIZE(us_keymap))
+    // Skip key release, invalid index or negative indexing on weird notifier implementations
+    if (!p->down || p->value < 0 || p->value >= ARRAY_SIZE(us_keymap))
         return NOTIFY_OK;
 
     key_str = us_keymap[p->value][p->shift ? 1 : 0];
