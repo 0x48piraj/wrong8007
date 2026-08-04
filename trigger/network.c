@@ -42,6 +42,9 @@ static size_t payload_len = 0;
 /* Netfilter hook */
 static struct nf_hook_ops nfho;
 
+/* Tracks netfilter hook ownership across init/exit. */
+static bool hook_registered;
+
 /* Heartbeat tracking */
 static struct timer_list hb_timer;
 static unsigned long last_seen_jiffies;
@@ -368,6 +371,12 @@ static int trigger_network_init(void)
         }
     }
 
+    /* Register the hook only when at least one network parameter is set */
+    if (!match_mac && !match_ip && !match_port && !match_payload && !heartbeat_host) {
+        wb_warn("network trigger disabled (no network parameters)\n");
+        return 0; // success, no hook
+    }
+
     /* Heartbeat setup */
     if (heartbeat_host) {
         if (!parse_ip(heartbeat_host, &heartbeat_ip_addr)) {
@@ -408,13 +417,17 @@ static int trigger_network_init(void)
         return ret;
     }
 
+    hook_registered = true;
     wb_info("network trigger initialized\n");
     return 0;
 }
 
 static void trigger_network_exit(void)
 {
-    nf_unregister_net_hook(&init_net, &nfho);
+    if (hook_registered) {
+        nf_unregister_net_hook(&init_net, &nfho);
+        hook_registered = false;
+    }
     if (heartbeat_host)
         wb_timer_delete_sync(&hb_timer);
     wb_info("network trigger exited\n");
