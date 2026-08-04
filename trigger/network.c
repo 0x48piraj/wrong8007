@@ -23,17 +23,16 @@
 
 #define PAYLOAD_SCAN_WIN 512
 
-/* Module params */
-static char *match_mac = NULL;       // MAC address in "aa:bb:cc:dd:ee:ff" or NULL
-static char *match_ip = NULL;        // IPv4 in dotted-decimal or NULL
-static int match_port = 0;           // TCP/UDP port for magic packet
-static char *match_payload = NULL;   // Magic payload string to match
+static char *match_mac;
+static char *match_ip;
+static int match_port;
+static char *match_payload;
 
-static char *heartbeat_host = NULL;  // Host to ping periodically (string IP)
-static unsigned int heartbeat_interval = 10; // seconds
-static unsigned int heartbeat_timeout   = 30; // seconds
+static char *heartbeat_host;
+static unsigned int heartbeat_interval = 10;
+static unsigned int heartbeat_timeout = 30;
 
-/* Parsed forms */
+/* Parsed trigger configuration */
 static u8 mac_bytes[ETH_ALEN];
 static __be32 match_ip_addr = 0;
 static __be32 heartbeat_ip_addr = 0;
@@ -42,10 +41,10 @@ static size_t payload_len = 0;
 /* Netfilter hook */
 static struct nf_hook_ops nfho;
 
-/* Tracks netfilter hook ownership across init/exit. */
+/* Tracks netfilter hook ownership across init/exit */
 static bool hook_registered;
 
-/* Heartbeat tracking */
+/* Heartbeat state */
 static struct timer_list hb_timer;
 static unsigned long last_seen_jiffies;
 
@@ -54,13 +53,13 @@ static DEFINE_SPINLOCK(hb_lock);
 /*
  * Parse a MAC address into binary form.
  *
- * Colon-separated, dash-separated and contiguous hexadecimal forms are
- * accepted.
+ * Accepts colon-separated, dash-separated and contiguous hexadecimal
+ * representations.
  */
 static bool parse_mac(const char *s, u8 *out)
 {
     int i = 0;
-    int hi = -1; /* high nibble accumulator, -1 means waiting for high nibble */
+    int hi = -1; /* High nibble accumulator */
 
     if (!s || !out)
         return false;
@@ -68,45 +67,25 @@ static bool parse_mac(const char *s, u8 *out)
     while (*s && i < ETH_ALEN) {
         char c = *s++;
 
-        /* convert hex nibble; skip separators */
-        int val;
+        int nibble;
         if (c >= '0' && c <= '9')
-            val = c - '0';
+            nibble = c - '0';
         else if (c >= 'a' && c <= 'f')
-            val = c - 'a' + 10;
+            nibble = c - 'a' + 10;
         else if (c >= 'A' && c <= 'F')
-            val = c - 'A' + 10;
+            nibble = c - 'A' + 10;
         else
-            continue; /* skip ':' '-' or any other separator */
+            continue; /* Ignore non-hex characters */
 
         if (hi == -1) {
-            hi = val;
+            hi = nibble;
         } else {
-            out[i++] = (u8)((hi << 4) | val);
+            out[i++] = (u8)((hi << 4) | nibble);
             hi = -1;
         }
     }
 
-    /* must have exactly 6 bytes and no stray half-nibble */
-    if (i == ETH_ALEN && hi == -1)
-        return true;
-
-    return false;
-}
-
-/*
- * Parse an IPv4 address into network byte order.
- */
-static bool parse_ip(const char *ip_str, __be32 *out)
-{
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,38)
-    return ip_str && in4_pton(ip_str, -1, (u8 *)out, '\0', NULL);
-#else
-    if (!ip_str)
-        return false;
-    *out = in_aton(ip_str);
-    return *out != 0;
-#endif
+    return i == ETH_ALEN && hi == -1;
 }
 
 /*
@@ -120,8 +99,7 @@ static inline size_t skb_offset(const struct sk_buff *skb, const void *ptr)
 /*
  * Monitor heartbeat liveness.
  *
- * The trigger fires once the configured heartbeat has not been observed
- * within the timeout window.
+ * Trigger execution once the configured heartbeat expires.
  */
 static void hb_timer_fn(struct timer_list *t)
 {
@@ -167,8 +145,8 @@ static void *k_memmem(const void *haystack, size_t haystack_len,
 /*
  * Search a packet payload for the configured magic string.
  *
- * Payloads may span fragmented skbs, so matching operates on copied
- * windows rather than assuming a contiguous linear buffer.
+ * Payload inspection is independent of skb layout and safely spans
+ * fragmented buffers.
  */
 static bool payload_contains(const struct sk_buff *skb, size_t offset,
                              size_t payload_size, const char *needle,
@@ -185,7 +163,6 @@ static bool payload_contains(const struct sk_buff *skb, size_t offset,
     for (pos = 0; pos + needle_len <= payload_size; pos += advance) {
         size_t len = min(win, payload_size - pos);
 
-        // safely walks frags
         if (skb_copy_bits(skb, offset + pos, buf, len))
             return false;
 
@@ -203,8 +180,8 @@ static bool payload_contains(const struct sk_buff *skb, size_t offset,
  * Evaluate incoming packets against the configured network triggers.
  *
  * Matching progresses from L2 through L4, allowing increasingly
- * specific trigger conditions without exposing execution policy to the
- * trigger implementation.
+ * specific trigger conditions while execution remains owned by
+ * the core.
  */
 static unsigned int nf_hook_fn(void *priv,
                                 struct sk_buff *skb,
@@ -218,29 +195,25 @@ static unsigned int nf_hook_fn(void *priv,
     unsigned int iph_len;
     size_t offset;
 
-    /* L3 / IPv4 only */
     if (skb->protocol != htons(ETH_P_IP))
         goto out;
 
-    /* Ensure we can read the base IP header */
     if (!pskb_may_pull(skb, sizeof(struct iphdr)))
         goto out;
 
     iph = ip_hdr(skb);
 
-    /* Validate IP header length (IHL: 4-byte words, min 5) */
     if (iph->ihl < 5)
         goto out;
 
     iph_len = iph->ihl * 4;
 
-    /* Ensure complete IP header is available linearly */
     if (!pskb_may_pull(skb, iph_len))
         goto out;
 
-    iph = ip_hdr(skb); /* refresh pointer after pskb_may_pull */
+    iph = ip_hdr(skb);
 
-    /* Refresh heartbeat liveness before evaluating trigger conditions. */
+    /* Refresh heartbeat liveness before evaluating trigger conditions */
     if (heartbeat_host && iph->saddr == heartbeat_ip_addr) {
         unsigned long flags;
         spin_lock_irqsave(&hb_lock, flags);
@@ -248,7 +221,6 @@ static unsigned int nf_hook_fn(void *priv,
         spin_unlock_irqrestore(&hb_lock, flags);
     }
 
-    /* L2 / MAC match: validate MAC header before using eth_hdr() */
     if (match_mac) {
         if (!skb_mac_header_was_set(skb) || skb->mac_len < ETH_HLEN)
             goto out;
@@ -256,36 +228,31 @@ static unsigned int nf_hook_fn(void *priv,
         if (!pskb_may_pull(skb, ETH_HLEN))
             goto out;
 
-        iph = ip_hdr(skb); /* refresh pointer after pskb_may_pull */
+        iph = ip_hdr(skb);
         eth = eth_hdr(skb);
         if (!ether_addr_equal(mac_bytes, eth->h_source))
             goto out;
     }
 
-    /* L3 / IP match */
     if (match_ip && iph->saddr != match_ip_addr)
         goto out;
 
-    /* L4 / Payload matching */
     if (match_port || match_payload) {
 
         if (iph->protocol == IPPROTO_TCP) {
-            /* Ensure minimal TCP header is available */
             if (!pskb_may_pull(skb, iph_len + sizeof(struct tcphdr)))
                 goto out;
 
-            iph = ip_hdr(skb); /* refresh pointer after pskb_may_pull */
+            iph = ip_hdr(skb);
             tcph = (struct tcphdr *)((u8 *)iph + iph_len);
 
-            /* Validate TCP header length (doff is 32-bit words, min 5) */
             if (tcph->doff < 5)
                 goto out;
 
-            /* Ensure entire TCP header is present */
             if (!pskb_may_pull(skb, iph_len + tcph->doff * 4))
                 goto out;
 
-            iph = ip_hdr(skb); /* refresh pointer after pskb_may_pull */
+            iph = ip_hdr(skb);
             tcph = (struct tcphdr *)((u8 *)iph + iph_len);
 
             if (match_port &&
@@ -299,14 +266,12 @@ static unsigned int nf_hook_fn(void *priv,
             payload_size = skb->len - offset;
 
         } else if (iph->protocol == IPPROTO_UDP) {
-            /* Ensure minimal UDP header is available */
             if (!pskb_may_pull(skb, iph_len + sizeof(struct udphdr)))
                 goto out;
 
-            iph = ip_hdr(skb); /* refresh pointer after pskb_may_pull */
+            iph = ip_hdr(skb);
             udph = (struct udphdr *)((u8 *)iph + iph_len);
 
-            /* UDP length from header (network order) */
             if (ntohs(udph->len) < sizeof(struct udphdr))
                 goto out;
 
@@ -315,19 +280,17 @@ static unsigned int nf_hook_fn(void *priv,
                 ntohs(udph->dest) != match_port)
                 goto out;
 
-            /* Ensure the entire UDP datagram as reported is available */
             if (!pskb_may_pull(skb, iph_len + ntohs(udph->len)))
                 goto out;
 
-            iph = ip_hdr(skb); /* refresh pointer after pskb_may_pull */
+            iph = ip_hdr(skb);
             udph = (struct udphdr *)((u8 *)iph + iph_len);
 
             offset = skb_offset(skb, (u8 *)udph + sizeof(struct udphdr));
             if (offset > skb->len)
                 goto out;
-            /* UDP len includes UDP header */
-            payload_size = ntohs(udph->len) - sizeof(struct udphdr);
 
+            payload_size = ntohs(udph->len) - sizeof(struct udphdr);
         } else {
             goto out;
         }
@@ -339,7 +302,7 @@ static unsigned int nf_hook_fn(void *priv,
         }
 
     } else if (match_mac || match_ip) {
-        /* Pure MAC/IP match triggers */
+        /* Trigger on L2/L3 match alone */
         wb_info("MAC/IP trigger matched, scheduling exec\n");
         wrong8007_activate();
     }
@@ -359,14 +322,13 @@ static int trigger_network_init(void)
         }
     }
     if (match_ip) {
-        if (!parse_ip(match_ip, &match_ip_addr)) {
+        if (!wb_parse_ipv4(match_ip, &match_ip_addr)) {
             wb_err("invalid IP format\n");
             return -EINVAL;
         }
     }
     if (match_payload) {
         payload_len = strlen(match_payload);
-        /* Ignore empty payload string to avoid matching every packet */
         if (payload_len == 0) {
             wb_warn("empty payload string, ignoring payload match\n");
             match_payload = NULL;
@@ -378,15 +340,14 @@ static int trigger_network_init(void)
         }
     }
 
-    /* Register the hook only when at least one network parameter is set */
     if (!match_mac && !match_ip && !match_port && !match_payload && !heartbeat_host) {
         wb_warn("network trigger disabled (no network parameters)\n");
         return 0; // success, no hook
     }
 
-    /* Heartbeat setup */
+    /* Initialize heartbeat monitoring */
     if (heartbeat_host) {
-        if (!parse_ip(heartbeat_host, &heartbeat_ip_addr)) {
+        if (!wb_parse_ipv4(heartbeat_host, &heartbeat_ip_addr)) {
             wb_err("invalid heartbeat host IP\n");
             return -EINVAL;
         }
@@ -410,7 +371,7 @@ static int trigger_network_init(void)
         mod_timer(&hb_timer, jiffies + (unsigned long)heartbeat_interval * HZ);
     }
 
-    /* Install Netfilter hook */
+    /* Activate packet inspection */
     nfho.hook = nf_hook_fn;
     nfho.hooknum = NF_INET_PRE_ROUTING;
     nfho.pf = PF_INET;
