@@ -21,63 +21,120 @@ MODULE_PARM_DESC(phrase, "keyboard input to trigger on (e.g., 'nuke')");
 // Internal storage of module params
 static char *phrase_buf;
 
-// Simplified US keymap; non-US layouts unsupported by design
-static const char us_keymap[][2][8] = {
-    {"\0", "\0"}, {"[ESC]", "[ESC]"}, {"1", "!"}, {"2", "@"},
-    {"3", "#"}, {"4", "$"}, {"5", "%"}, {"6", "^"},
-    {"7", "&"}, {"8", "*"}, {"9", "("}, {"0", ")"},
-    {"-", "_"}, {"=", "+"}, {"[BKSP]", "[BKSP]"}, {"[TAB]", "[TAB]"},
-    {"q", "Q"}, {"w", "W"}, {"e", "E"}, {"r", "R"}, {"t", "T"},
-    {"y", "Y"}, {"u", "U"}, {"i", "I"}, {"o", "O"}, {"p", "P"},
-    {"[", "{"}, {"]", "}"}, {"\n", "\n"}, {"[LCTRL]", "[LCTRL]"},
-    {"a", "A"}, {"s", "S"}, {"d", "D"}, {"f", "F"}, {"g", "G"},
-    {"h", "H"}, {"j", "J"}, {"k", "K"}, {"l", "L"}, {";", ":"},
-    {"'", "\""}, {"`", "~"}, {"[LSHIFT]", "[LSHIFT]"}, {"\\", "|"},
-    {"z", "Z"}, {"x", "X"}, {"c", "C"}, {"v", "V"}, {"b", "B"},
-    {"n", "N"}, {"m", "M"}, {",", "<"}, {".", ">"}, {"/", "?"},
-    {"[RSHIFT]", "[RSHIFT]"}, {"*", "*"}, {"[LALT]", "[LALT]"}, {" ", " "},
-};
-
 // Internal storage of match progress
 static unsigned int matches;
 static DEFINE_SPINLOCK(match_lock);
 
 /*
- * Keyboard notifier callback: matches the trigger phrase character by character
+ * Encode a Unicode codepoint as UTF-8.
+ *
+ * Returns the number of bytes written, or 0 if the codepoint
+ * is outside the supported range.
+ */
+static int utf8_encode(char *out, unsigned int cp)
+{
+    if (cp < 0x80) {
+        out[0] = (char)cp;
+        return 1;
+    }
+    if (cp < 0x800) {
+        out[0] = (char)(0xc0 | (cp >> 6));
+        out[1] = (char)(0x80 | (cp & 0x3f));
+        return 2;
+    }
+    if (cp < 0x10000) {
+        out[0] = (char)(0xe0 | (cp >> 12));
+        out[1] = (char)(0x80 | ((cp >> 6) & 0x3f));
+        out[2] = (char)(0x80 | (cp & 0x3f));
+        return 3;
+    }
+    return 0;
+}
+
+/*
+ * Decode a printable character from a KBD_KEYSYM notification.
+ *
+ * Returns the UTF-8 encoding of the resolved character, or 0 if the
+ * notification does not represent printable input.
+ */
+static int decode_keysym(unsigned int value, char *out)
+{
+    unsigned char type = KTYP(value);
+    unsigned char v = KVAL(value);
+
+    if (type >= 0xf0)
+        type -= 0xf0;
+
+    if (type != KT_LATIN && type != KT_LETTER)
+        return 0;
+
+    return utf8_encode(out, v);
+}
+
+/*
+ * Decode a printable character from a KBD_UNICODE notification.
+ *
+ * Returns the UTF-8 encoding of the resolved character, or 0 if the
+ * notification does not represent printable input.
+ */
+static int decode_unicode(unsigned int value, char *out)
+{
+    if (KTYP(value) != KT_LATIN)
+        return 0;
+
+    return utf8_encode(out, KVAL(value));
+}
+
+/*
+ * Match the configured trigger phrase against the printable characters
+ * produced by the keyboard notifier.
+ *
+ * By operating on resolved input rather than raw keycodes, phrase
+ * matching follows the active keyboard layout automatically.
  */
 static int kbd_cb(struct notifier_block *nb, unsigned long action, void *data)
 {
     struct keyboard_notifier_param *p = data;
-    const char *key_str;
-    char key;
+    char bytes[3];
+    int clen;
+    int i;
     unsigned long flags;
 
-    // Skip key release, invalid index or negative indexing on weird notifier implementations
-    if (!p->down || p->value < 0 || p->value >= ARRAY_SIZE(us_keymap))
+    // Match only initial key presses
+    if (p->down != 1)
         return NOTIFY_OK;
 
-    key_str = us_keymap[p->value][p->shift ? 1 : 0];
+    // Ignore raw keycodes; match only resolved characters
+    if (action == KBD_KEYSYM)
+        clen = decode_keysym(p->value, bytes);
+    else if (action == KBD_UNICODE)
+        clen = decode_unicode(p->value, bytes);
+    else
+        return NOTIFY_OK;
 
-    // Skip if special key (length != 1)
-    if (!key_str[0] || key_str[1]) return NOTIFY_OK;
+    if (clen <= 0)
+        return NOTIFY_OK;
+
+    wb_dbg("kbd: keysym=0x%x, %d UTF-8 byte(s)\n", p->value, clen);
 
     // Avoid NULL deref of phrase_buf on teardown edge cases
     if (unlikely(!phrase_buf))
         return NOTIFY_OK;
 
-    // Match only printable single chars
-    key = key_str[0];
-
     spin_lock_irqsave(&match_lock, flags);
 
-    if (key == phrase_buf[matches]) {
-        matches++;
-        if (phrase_buf[matches] == '\0') {
-            wrong8007_activate();
-            matches = 0;
+    for (i = 0; i < clen; i++) {
+        if (bytes[i] == phrase_buf[matches]) {
+            matches++;
+            if (phrase_buf[matches] == '\0') {
+                wb_info("phrase matched, scheduling exec\n");
+                wrong8007_activate();
+                matches = 0;
+                break;
+            }
+        } else {
+            matches = (bytes[i] == phrase_buf[0]) ? 1 : 0;
         }
-    } else {
-        matches = (key == phrase_buf[0]) ? 1 : 0;
     }
 
     spin_unlock_irqrestore(&match_lock, flags);
