@@ -19,6 +19,7 @@
 #include <linux/version.h>
 
 #include <wrong8007.h>
+#include <compat.h>
 
 /* Module params */
 static char *match_mac = NULL;       // MAC address in "aa:bb:cc:dd:ee:ff" or NULL
@@ -339,7 +340,7 @@ static int trigger_network_init(void)
     if (ret) {
         wb_err("failed to register net hook: %d\n", ret);
         if (heartbeat_host)
-            del_timer_sync(&hb_timer);
+            wb_timer_delete_sync(&hb_timer);
         return ret;
     }
 
@@ -351,7 +352,7 @@ static void trigger_network_exit(void)
 {
     nf_unregister_net_hook(&init_net, &nfho);
     if (heartbeat_host)
-        del_timer_sync(&hb_timer);
+        wb_timer_delete_sync(&hb_timer);
     wb_info("network trigger exited\n");
 }
 
