@@ -8,11 +8,15 @@ on:
       - "core.c"
       - "include/**"
       - "trigger/**"
+      - "Kbuild"
+      - "Makefile"
   pull_request:
     paths:
       - "core.c"
       - "include/**"
       - "trigger/**"
+      - "Kbuild"
+      - "Makefile"
 
 jobs:
   build:
