@@ -110,6 +110,14 @@ static bool parse_ip(const char *ip_str, __be32 *out)
 }
 
 /*
+ * Convert a packet pointer into an skb-relative offset.
+ */
+static inline size_t skb_offset(const struct sk_buff *skb, const void *ptr)
+{
+    return (const u8 *)ptr - (const u8 *)skb->data;
+}
+
+/*
  * Monitor heartbeat liveness.
  *
  * The trigger fires once the configured heartbeat has not been observed
@@ -285,8 +293,7 @@ static unsigned int nf_hook_fn(void *priv,
                 ntohs(tcph->dest) != match_port)
                 goto out;
 
-            /* Locate the transport payload. */
-            offset = iph_len + tcph->doff * 4;
+            offset = skb_offset(skb, (u8 *)tcph + tcph->doff * 4);
             if (offset > skb->len)
                 goto out;
             payload_size = skb->len - offset;
@@ -315,7 +322,7 @@ static unsigned int nf_hook_fn(void *priv,
             iph = ip_hdr(skb); /* refresh pointer after pskb_may_pull */
             udph = (struct udphdr *)((u8 *)iph + iph_len);
 
-            offset = iph_len + sizeof(struct udphdr);
+            offset = skb_offset(skb, (u8 *)udph + sizeof(struct udphdr));
             if (offset > skb->len)
                 goto out;
             /* UDP len includes UDP header */
