@@ -1,37 +1,129 @@
 # Design philosophy
 
-This project is built on a few strong, guiding principles. While the use case may be highly specific, the underlying decisions are shaped by a broader mindset: speed, simplicity, and survivability.
+Wrong Boot is built around a simple observation:
 
-The goal: fast, quiet, and deterministic execution of pre-authorized actions when system control is threatened without reliance on user space or operator intervention.
+> **The decision that matters most is often the one made before an incident begins.**
 
-## 1. Speed & Reliability
+When control of a system is threatened, there may be no opportunity to stop and decide what to do next. The outcome depends on the decisions made beforehand.
 
-Time is critical. This system is designed to respond **instantly** - no waiting, no asking. Triggers are fired at the lowest layers possible (like kernel hooks), enabling near-zero delay between detection and action.
+Everything else in this project follows from that premise.
 
-Once activated, the execution path prioritizes **deterministic, pre-authorized actions**: whether that means securing sensitive files, locking down the system, shutting it down, alerting a remote endpoint, or invoking custom defensive logic. Actions are executed exactly as defined, without runtime decisions or user interaction.
+## The kernel is the trust boundary
 
-## 2. Stealth & Camouflage
+Wrong Boot assumes user space may become unavailable, compromised, or simply too late.
 
-A good trigger leaves no trail. This tool avoids logging, suppresses output, and runs as silently as possible. No flashing warnings, no terminal chatter. If deployed correctly, it blends into the system - invisible until it's not.
+For that reason, trigger detection lives entirely in kernel space and relies on existing kernel subsystems rather than long-running daemons or polling loops.
 
-Kernel-level hooks, such as phrase detection, USB events, or network activity, make trigger logic hard to observe and harder to interfere with, even under partial system compromise.
+Execution is intentionally deferred through the kernel workqueue API so that trigger callbacks remain lightweight and execute only in contexts where user-space execution is permitted.
 
-## 3. Simplicity & Minimal dependencies
+## Architecture
 
-Complexity is a liability. Every moving part is another thing that can break, slow you down, or get noticed.  The system relies only on what's already available in most environments - standard tools, basic syscalls, no obscure packages or third-party cruft.
+Wrong Boot follows a small core, pluggable trigger architecture.
 
-This keeps the design lightweight, predictable, and portable, with minimal configuration and no dependency on a trusted user-space environment at the moment of activation.
+Every trigger is responsible only for detecting a condition.
 
-## 4. Robustness & Failsafes
+The core owns everything that happens afterwards, including execution policy, lifecycle management and coordination between triggers.
 
-Fail-closed by design. When a trigger fires, the system assumes control is already at risk and proceeds immediately with the configured action set.
+This separation keeps individual triggers focused while allowing the execution model to evolve independently.
 
-If an execution path fails, fallback behavior is defined by configuration, not assumption. Actions may be chained, escalated, or replaced according to the operator's intent. Execution is one-shot and irreversible by design - there are no retries, prompts, or rollbacks.
+<p align="center">
+  <img width="708" height="440" src="https://github.com/user-attachments/assets/d0bb5624-77b1-45d7-bff8-8adb7a45859a" alt="system architecture" />
+</p>
 
-You only get one shot - it needs to count.
+### Separation of responsibilities
 
-## 5. No persistent artifacts
+Triggers answer exactly one question:
 
-Leave no trace. The system writes nothing beyond what the configured action explicitly performs. No logs, no state files, no temporary markers. Trigger handling and decision logic remain entirely in memory.
+> **Has a condition been met?**
 
-Once it's done, there's nothing left to investigate - no output, no artifacts, no hints.
+They do not decide:
+
+- What should happen,
+- When it should happen,
+- Whether another trigger should win.
+
+Those responsibilities belong exclusively to the core.
+
+Keeping triggers detection-only makes them easier to understand, audit and extend without affecting execution behavior.
+
+### One interface, many triggers
+
+Every trigger communicates with the core through the same public interface:
+
+```c
+wrong8007_activate();
+```
+
+A trigger never executes user-space code directly.
+
+Instead, it requests execution and immediately returns. Whether execution proceeds is entirely the responsibility of the core.
+
+This stable interface keeps trigger implementations independent of execution policy and minimizes coupling between components.
+
+### Ownership and coordination
+
+Execution is intentionally one-shot.
+
+Multiple trigger types may be active simultaneously, but the first trigger that satisfies its condition is the only one that can request execution successfully.
+
+Internally, this is implemented as an execution latch.
+
+```mermaid
+flowchart TB
+    Trigger[Trigger detects condition]
+    Core[Core execution policy]
+    Latch[One-shot latch]
+    Work[Deferred workqueue]
+
+    Trigger -->|request| Core
+    Core -->|authorize execution| Latch
+    Latch -->|consumed on first trigger| Work
+```
+
+This model centralizes ownership inside the core while allowing every trigger to remain completely independent.
+
+As a result:
+
+- Execution occurs at most once.
+- Competing triggers cannot race one another.
+- Execution policy is implemented in one place.
+- Triggers remain unaware of one another.
+- New trigger types can be introduced without changing execution logic.
+
+### Extensibility
+
+Supporting a new event source should require implementing only that trigger.
+
+Existing triggers should not need to change.
+
+Likewise, changes to execution policy should not require modifying trigger implementations.
+
+This separation allows the project to grow without increasing coupling.
+
+## Engineering principles
+
+### Fail closed
+
+Configuration is validated before the module becomes active.
+
+Invalid parameters prevent the module from loading.
+
+Wrong Boot prefers refusing to operate over silently accepting ambiguous, incomplete or partially valid configurations.
+
+### Predictability over cleverness
+
+Kernel code rewards simplicity.
+
+Clear ownership, clean state transitions and simple control flow are preferred over clever algorithms or tightly coupled designs.
+
+The project intentionally favors code that is easy to reason about over code that is merely concise.
+
+## The operator decides
+
+Wrong Boot does not prescribe a payload.
+
+It defines **when** execution occurs, never **what** execution should do.
+
+Whether the configured action archives evidence, sends an alert, locks a system, destroys data, or performs something entirely different is outside the module's scope.
+
+The project provides the mechanism. The operator defines the policy.

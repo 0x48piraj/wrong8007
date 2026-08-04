@@ -1,4 +1,4 @@
-# The world of nuking!
+# Welcome to the world of nuking!
 
 This document explains the **theoretical and practical basis** for data destruction payloads commonly used with `wrong8007`.
 

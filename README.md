@@ -2,15 +2,13 @@
 
 **Wrong Boot** (*codename: `wrong8007`*) is a **programmable dead man's switch** for Linux, living entirely in kernel space. Think of it as the software equivalent of a burner phone **OR** a modular kernel trigger framework for last-resort execution.
 
-Inspired by the legendary [USBKill](https://github.com/hephaest0s/usbkill) project and reinvented from scratch, it's **modular, trigger-agnostic**, and **execution-flexible**: you choose how it activates, you choose what it does.
+Inspired by the [USBKill](https://github.com/hephaest0s/usbkill) project, Wrong Boot rethinks the idea as a modular Linux kernel module. Triggers are independent of execution, allowing the same core to support different activation mechanisms while leaving payloads entirely user-defined.
 
-This project was revisited and expanded in memory of **[Mark Klein](https://en.wikipedia.org/wiki/Mark_Klein)** (May 2, 1945 – March 8, 2025) the AT&T technician who, in 2006, revealed the existence of warrantless mass surveillance (Secrets of [Room 641A](https://en.wikipedia.org/wiki/Room_641A)) by the NSA.
+This project was revisited and expanded in memory of **[Mark Klein](https://en.wikipedia.org/wiki/Mark_Klein)** (May 2, 1945 - March 8, 2025), the AT&T technician who, in 2006, revealed the existence of warrantless mass surveillance (Secrets of [Room 641A](https://en.wikipedia.org/wiki/Room_641A)) by the NSA.
 
-In a world where truths vanish into evidence lockers, systems can be seized, tampered with or forcibly accessed, and control can be taken in seconds, **reaction time is everything**.
+Systems can be seized, inspected, or tampered with in seconds. By then, the opportunity to decide may already be gone. What remains is the decision you made *beforehand*.
 
-Wrong Boot isn't just a tool. It's **last words**. A line you draw before someone else crosses it.
-
-When the moment comes, **`wrong8007`** won't ask questions. It will act exactly how you told it to.
+Wrong Boot exists for those situations. It monitors predefined conditions from within the kernel and executes the response you chose before that moment arrived.
 
 <p align="center">
   <img src="https://github.com/user-attachments/assets/d5a0bb9e-a23e-46f8-af5f-bb8e01277dca" alt="demo gif">
@@ -24,74 +22,20 @@ When the moment comes, **`wrong8007`** won't ask questions. It will act exactly 
   <a href="docs/manifesto.md">Philosophy</a>
 </p>
 
-> **Disclaimer:** This project is for educational and lawful defensive purposes only. Using it to damage systems you don't own or have permission to modify is illegal.
-
 ## Features
 
 * **Kernel-space monitoring**: Zero user-space dependencies; works even if most of the system is compromised.
-* **Multiple triggers**: Phrase detection, USB events, network packets all extendable by design.
-* **Custom execution hooks**: Run any script or binary, from data wipes to custom alerting logic.
+* **Multiple trigger types**: Phrase detection, USB events, network packets all extendable by design.
+* **Operator-defined execution**: Run any script or binary, from data wipes to custom logic.
 * **Fail-closed design**: Invalid configurations prevent module load rather than causing undefined behavior.
 * **Fast & silent**: Triggers execution instantly, without relying on cron jobs or user-space daemons.
-* **Modular architecture**: Clean separation between core logic and triggers.
+* **Modular**: Clean separation between core logic and triggers.
 
 ## Design
 
-The design of this project was intentionally made modular to allow for customization and the use of individualized solutions (by default, it comes with a rudimentary script for nuking).
+Wrong Boot separates trigger detection from execution. Triggers only report that a condition has been met; the core decides *whether* and *when* execution occurs. This separation keeps trigger implementations simple and execution behavior consistent.
 
-Wrong Boot's architecture keeps **triggers** separate from the **core logic**, making it easy to add or remove trigger types without touching the core.
-
-<p align="center">
-  <img width="708" height="440" src="https://github.com/user-attachments/assets/d0bb5624-77b1-45d7-bff8-8adb7a45859a" alt="system architecture" />
-</p>
-
-For example, the keyboard trigger (`trigger/keyboard.c`) listens for a secret phrase and instantly runs your configured executable when matched. Other triggers (USB, network) work independently - load the module with any combination you need.
-
-### Execution model
-
-Wrong Boot enforces **strict ownership and layering** between triggers and execution.
-
-**Triggers detect conditions only.**
-
-They do *not* execute payloads, coordinate with each other, or own execution state.
-
-**The core module owns execution policy**, including:
-
-- One-shot execution semantics (exactly once)
-- First-trigger-wins behavior
-- Deferred execution via a `workqueue`
-- Clean re-arming on module reload
-
-All triggers interact with the core through a single stable API:
-
-```c
-wrong8007_activate();
-````
-
-Internally, this is implemented as a **one-shot latch**:
-
-```mermaid
-flowchart TB
-    Trigger[Trigger detects condition]
-    Core[Core execution policy]
-    Latch[One-shot latch]
-    Work[Deferred workqueue]
-
-    Trigger -->|request| Core
-    Core -->|authorize execution| Latch
-    Latch -->|consumed on first trigger| Work
-```
-
-This design provides:
-
-* Clear ownership boundaries
-* Fail-closed behavior
-* Predictable execution
-* Easier auditing and future extension
-
-Triggers can only *request* execution. The core decides *if and when* it happens.
-
-You can read more about the project's design philosophy [here](docs/manifesto.md). For trust boundaries and non-goals, see the [security model](docs/security-model.md).
+Further design rationale is documented in the [design philosophy](docs/manifesto.md). The project's trust boundaries and security assumptions are described in the [security model](docs/security-model.md).
 
 ## Usage
 
@@ -170,11 +114,7 @@ The configured script will run immediately after the phrase is typed in sequence
 
 ## USB-based triggers
 
-The `wrong8007` kernel module supports advanced USB event–based triggers with flexible configuration:
-
-* **Multiple USB devices supported** in a single load.
-* Fine-grained control over **event types**: insertion, removal (eject), or any activity.
-* Support for **whitelisting** or **blacklisting** USB devices.
+USB triggers can be configured to react to insertion, removal, or both for one or more devices.
 
 ### Usage
 
@@ -225,47 +165,16 @@ Use:
 lsusb
 ```
 
-### ⚠️ Note on parameter validation and trigger behavior
-
-Dynamic configuration via the `usb_devices` module parameter was introduced and improved in commits [`7a6ab4d`](https://github.com/0x48piraj/wrong8007/commit/7a6ab4d428be8ce8ba9dbf6b8e187484362392d8) and [`4fd9648`](https://github.com/0x48piraj/wrong8007/commit/4fd96480dc4229787b9e9932b416e038b9cd1120), enabling runtime specification of USB device rules for fine-grained trigger control.
-
-This replaces the legacy approach introduced in commit [`875ff0a`](https://github.com/0x48piraj/wrong8007/commit/875ff0a9a8f7aee6515918a857ce067a2416f78a).
-
-* The module accepts USB device rules via the `usb_devices` module parameter as an **array of strings** in the format:
-
-  ```
-  VID:PID:EVENT
-  ```
-
-  where `EVENT` is one of `insert`, `eject`, or `any`.
-
-* Upon module load, these rules are **parsed and validated strictly**:
-
-  * Each rule is checked for correct hexadecimal VID and PID values.
-  * The event string is verified to be one of the supported values.
-  * Invalid or malformed rules cause the module initialization to fail with clear error messages.
-
-* If no valid USB device rules are provided, the USB trigger disables itself silently and does **not** register for USB event notifications.
-
-* This rigorous validation ensures that only well-formed configurations are accepted, avoiding undefined or unexpected behavior at runtime.
-
-* `usb_notifier_callback()` schedules work once per USB event so we don't need to dedup for correctness.
-
-* Users must provide valid rules; incorrect inputs will prevent module load.
-
-#### Design rationale
-
-* **Validation is performed in the kernel module on load**, ensuring invalid configurations are rejected immediately.
-
-* This balances **robustness and safety** with kernel code simplicity.
-
-* The module avoids runtime overhead of repeated checks by validating once during initialization.
-
-* Users should still carefully prepare module parameters (e.g. via scripts or tooling) to avoid load failures.
+> [!NOTE]
+> USB rules are validated during module initialization.
+>
+> - Rules must use the format `VID:PID[:EVENT]`.
+> - Invalid rules prevent the module from loading.
+> - If no rules are configured, the USB trigger remains disabled.
 
 ## Network-based triggers
 
-The `wrong8007` module supports various network-triggering modes - flexible enough for LAN environments, and stealthy when used with passive traffic.
+The network trigger can activate on observed MAC addresses, IPv4 addresses, UDP/TCP payloads, or heartbeat timeouts.
 
 ### Usage
 
@@ -313,30 +222,21 @@ Use the heartbeat sender script to periodically "ping" the module from the host:
 python3 scripts/heartbeat.py 192.168.1.1 1234
 ```
 
-#### ⚠️ Nuanced behavior of network-based triggers using IP/MAC
-
-> MAC-based triggers can activate immediately and unexpectedly, because any frame (such as ARP, broadcast, or even passive presence) from the target MAC is enough to trigger the module - no IP traffic is required.
+> [!NOTE]
+> #### MAC/IP trigger behavior
+> MAC-only triggers can activate immediately and unexpectedly on any Ethernet frame from the matching device, including ARP and broadcast traffic.
 >
->  IP-based triggers are slightly more restrictive - they only fire when a valid IP packet is seen from the specified address. If the device hasn't sent anything yet at the IP layer, the trigger won't activate.
+> IP-only triggers activate only after a valid IPv4 packet is observed.
 >
-> If you're using MAC- or IP-only triggers on devices already active on the same network (e.g., your own machine), you risk triggering the payload immediately on load, which can lead to unintended consequences including self-triggering.
-
-To avoid accidental activation:
-
-- Do not rely solely on MAC/IP triggers in sensitive environments.
-- Prefer using magic packets if precision is critical. You can use `whisperer.py`, or any network utility to "poke" the module.
-- Ensure your trigger source is not present on the network during module load (e.g., an external device that only joins the network when needed).
-
-While limited, MAC/IP-only triggers are not useless, they shine in scenarios where:
-
-- The target device is not always connected, and
-- You want the module to activate only when that specific MAC or IP joins the network.
-
-This makes them ideal for:
-
-- Air-gapped or controlled environments
-- Proximity-based activation
-- Triggers that rely on the appearance of a trusted device
+> Because of this, if you're using MAC- or IP-only triggers on devices already active on the same network, you risk triggering the payload immediately on load, which can lead to unintended consequences.
+>
+> MAC/IP-only triggers are not useless, they can shine in:
+>
+> - Air-gapped or controlled environments
+> - Proximity-based activation
+> - Triggers that rely on the appearance of a trusted device
+>
+> Prefer **payload-based triggers** when operator control over activation is required.
 
 ## Contributing
 
@@ -350,54 +250,10 @@ PRs that violate the project's trust boundaries or safety guarantees will not be
 
 ## Data destruction notes
 
-**Wrong Boot** does not prescribe *how* you destroy data, only *when*.
+**Wrong Boot** defines *when* execution occurs, not *what* is executed.
 
 For operators designing their wipe or sanitization payloads, see:
-- [Data destruction & Wiping rationale](docs/dd.md)
-
-This document covers common myths, modern research, and practical tooling for effective data sanitization.
-
-## Roadmap
-
-This checklist outlines what's been completed so far and what still needs to be addressed.
-
-- [x] Functionally complete
-  - [x] Performs all core tasks reliably (e.g., all triggers work as intended)
-  - [x] Handles edge cases (e.g., timeout conditions, invalid input)
-
-- [x] Documented
-  - [x] Explain purpose, setup, usage, and caveats
-  - [x] Example commands, options, and expected behavior are clear
-  - [x] Module parameters and triggers are well-explained
-
-- [x] Configurable and extensible
-  - [x] Users can add or combine triggers easily
-  - [x] Clear boundaries between core logic and pluggable parts (e.g., USB/network)
-
-- [ ] Tested or testable
-  - [ ] Demonstrates functionality in multiple environments or under stress
-  - [ ] Includes safety mechanisms (e.g., no accidental wipes, warnings for common mistakes)
-
-- [x] No obvious bugs or kernel warnings
-  - [x] Loads/unloads cleanly
-  - [x] No kernel panics
-  - [x] `dmesg` pollution
-
-- [x] Stable and versioned
-  - [x] Tagged releases (e.g., v1.0.0)
-  - [x] Changelog is maintained
-
-- [x] Logging levels or debug modes for safe testing
-- [ ] Optional dry-run modes or mock environments
-- [ ] Security hardening (e.g., restrict who can insert the module)
-- [ ] Packaging
-  - [ ] DKMS support
-  - [x] Makefile with runtime-configurable build flags
-  - [ ] Install/uninstall scripts
-
-## What's next
-
-Wrong Boot has the potential to evolve into a full-fledged, bootable OS, purpose-built for operational survivability.
+- [Data destruction & Wiping rationale](docs/dd.md): Covers common myths, modern research and practical tooling for effective data sanitization.
 
 ### Who this project is for
 

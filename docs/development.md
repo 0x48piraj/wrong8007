@@ -180,3 +180,13 @@ Recommended workflow:
 * Treat this repository as reference-quality code
 
 If your trigger is hard to reason about, it **does not** belong here.
+
+## Trigger-specific notes
+
+### USB trigger
+
+USB device rules are parsed once during module initialization rather than in the notifier callback.
+
+This keeps the notifier callback focused solely on event matching and ensures invalid configurations fail before any USB notifier is registered.
+
+If no rules are configured, the USB trigger remains inactive and does not register a notifier.

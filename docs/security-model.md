@@ -2,9 +2,9 @@
 
 **`wrong8007`** is a Linux kernel module that executes a pre-configured action when specific low-level system triggers occur.
 
-This document defines the **explicit security boundaries, guarantees, and non-goals** of the project.
+This document defines the **explicit security boundaries, guarantees and non-goals** of the project.
 
-It exists to prevent ambiguity, misuse, and incorrect assumptions by users, auditors, and contributors.
+It exists to prevent ambiguity, misuse and incorrect assumptions by users, auditors and contributors.
 
 For architectural context, see [design philosophy](manifesto.md). For implementation details, see [development guide](development.md).
 
@@ -101,6 +101,6 @@ It is intended for:
 - Incident response
 - Physical security contingencies
 
-You are solely responsible for ensuring compliance with local laws, organizational policies, and ethical guidelines.
+You are solely responsible for ensuring compliance with local laws, organizational policies and ethical guidelines.
 
-The authors make **no claim** that this tool is suitable for offensive, covert, or unauthorized use.
+The authors make **no claim** that this tool is suitable for offensive, covert, or unauthorized use. Using it to damage systems you don't own or have permission to modify is illegal.
