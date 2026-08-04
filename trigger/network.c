@@ -21,6 +21,8 @@
 #include <wrong8007.h>
 #include <compat.h>
 
+#define PAYLOAD_SCAN_WIN 512
+
 /* Module params */
 static char *match_mac = NULL;       // MAC address in "aa:bb:cc:dd:ee:ff" or NULL
 static char *match_ip = NULL;        // IPv4 in dotted-decimal or NULL
@@ -46,11 +48,11 @@ static unsigned long last_seen_jiffies;
 
 static DEFINE_SPINLOCK(hb_lock);
 
-/* Parse MAC address in formats:
- *   aa:bb:cc:dd:ee:ff
- *   aa-bb-cc-dd-ee-ff
- *   aabbccddeeff
- * Accepts upper or lower case hex. Returns true on success and fills out[].
+/*
+ * Parse a MAC address into binary form.
+ *
+ * Colon-separated, dash-separated and contiguous hexadecimal forms are
+ * accepted.
  */
 static bool parse_mac(const char *s, u8 *out)
 {
@@ -89,7 +91,9 @@ static bool parse_mac(const char *s, u8 *out)
     return false;
 }
 
-/* Convert IPv4 string to __be32 */
+/*
+ * Parse an IPv4 address into network byte order.
+ */
 static bool parse_ip(const char *ip_str, __be32 *out)
 {
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,38)
@@ -144,7 +148,48 @@ static void *k_memmem(const void *haystack, size_t haystack_len,
     return NULL;
 }
 
-/* Netfilter hook function */
+/*
+ * Scan the packet payload for the magic string without assuming the payload
+ * is contiguous in the skb linear area.
+ * The payload is read into a bounded stack buffer in overlapping windows so a
+ * needle straddling a window boundary is still found.
+ */
+static bool payload_contains(const struct sk_buff *skb, size_t offset,
+                             size_t payload_size, const char *needle,
+                             size_t needle_len)
+{
+    u8 buf[PAYLOAD_SCAN_WIN];
+    size_t win = min_t(size_t, payload_size, PAYLOAD_SCAN_WIN);
+    size_t advance = win > needle_len ? win - needle_len + 1 : 1;
+    size_t pos;
+
+    if (!needle_len || payload_size < needle_len)
+        return false;
+
+    for (pos = 0; pos + needle_len <= payload_size; pos += advance) {
+        size_t len = min(win, payload_size - pos);
+
+        // safely walks frags
+        if (skb_copy_bits(skb, offset + pos, buf, len))
+            return false;
+
+        if (k_memmem(buf, len, needle, needle_len))
+            return true;
+
+        if (len < win)
+            break;
+    }
+
+    return false;
+}
+
+/*
+ * Evaluate incoming packets against the configured network triggers.
+ *
+ * Matching progresses from L2 through L4, allowing increasingly
+ * specific trigger conditions without exposing execution policy to the
+ * trigger implementation.
+ */
 static unsigned int nf_hook_fn(void *priv,
                                 struct sk_buff *skb,
                                 const struct nf_hook_state *state)
@@ -153,7 +198,6 @@ static unsigned int nf_hook_fn(void *priv,
     struct iphdr *iph;
     struct tcphdr *tcph;
     struct udphdr *udph;
-    u8 *payload;
     unsigned int payload_size;
     unsigned int iph_len;
     size_t offset;
@@ -188,6 +232,7 @@ static unsigned int nf_hook_fn(void *priv,
         if (!pskb_may_pull(skb, ETH_HLEN))
             goto out;
 
+        iph = ip_hdr(skb); /* refresh pointer after pskb_may_pull */
         eth = eth_hdr(skb);
         if (!ether_addr_equal(mac_bytes, eth->h_source))
             goto out;
@@ -208,15 +253,12 @@ static unsigned int nf_hook_fn(void *priv,
     /* L4 / Payload matching */
     if (match_port || match_payload) {
 
-        /* Ensure at least the entire skb linear region up to IP length is present */
-        if (!pskb_may_pull(skb, iph_len))
-            goto out;
-
         if (iph->protocol == IPPROTO_TCP) {
             /* Ensure minimal TCP header is available */
             if (!pskb_may_pull(skb, iph_len + sizeof(struct tcphdr)))
                 goto out;
 
+            iph = ip_hdr(skb); /* refresh pointer after pskb_may_pull */
             tcph = (struct tcphdr *)((u8 *)iph + iph_len);
 
             /* Validate TCP header length (doff is 32-bit words, min 5) */
@@ -227,16 +269,16 @@ static unsigned int nf_hook_fn(void *priv,
             if (!pskb_may_pull(skb, iph_len + tcph->doff * 4))
                 goto out;
 
-            tcph = (struct tcphdr *)((u8 *)iph + iph_len); /* refresh */
+            iph = ip_hdr(skb); /* refresh pointer after pskb_may_pull */
+            tcph = (struct tcphdr *)((u8 *)iph + iph_len);
 
             if (match_port &&
                 ntohs(tcph->source) != match_port &&
                 ntohs(tcph->dest) != match_port)
                 goto out;
 
-            /* Compute payload pointer/size safely */
-            payload = (u8 *)tcph + tcph->doff * 4;
-            offset = payload - (u8 *)skb->data;
+            /* Locate the transport payload. */
+            offset = iph_len + tcph->doff * 4;
             if (offset > skb->len)
                 goto out;
             payload_size = skb->len - offset;
@@ -246,6 +288,7 @@ static unsigned int nf_hook_fn(void *priv,
             if (!pskb_may_pull(skb, iph_len + sizeof(struct udphdr)))
                 goto out;
 
+            iph = ip_hdr(skb); /* refresh pointer after pskb_may_pull */
             udph = (struct udphdr *)((u8 *)iph + iph_len);
 
             /* UDP length from header (network order) */
@@ -261,10 +304,10 @@ static unsigned int nf_hook_fn(void *priv,
             if (!pskb_may_pull(skb, iph_len + ntohs(udph->len)))
                 goto out;
 
-            udph = (struct udphdr *)((u8 *)iph + iph_len); /* refresh */
+            iph = ip_hdr(skb); /* refresh pointer after pskb_may_pull */
+            udph = (struct udphdr *)((u8 *)iph + iph_len);
 
-            payload = (u8 *)udph + sizeof(struct udphdr);
-            offset = payload - (u8 *)skb->data;
+            offset = iph_len + sizeof(struct udphdr);
             if (offset > skb->len)
                 goto out;
             /* UDP len includes UDP header */
@@ -274,8 +317,8 @@ static unsigned int nf_hook_fn(void *priv,
             goto out;
         }
 
-        if (match_payload && payload_size >= payload_len &&
-            k_memmem(payload, payload_size, match_payload, payload_len)) {
+        if (match_payload &&
+            payload_contains(skb, offset, payload_size, match_payload, payload_len)) {
             wb_info("magic payload matched, scheduling exec\n");
             wrong8007_activate();
         }
@@ -313,6 +356,10 @@ static int trigger_network_init(void)
             wb_warn("empty payload string, ignoring payload match\n");
             match_payload = NULL;
             payload_len = 0;
+        } else if (payload_len > PAYLOAD_SCAN_WIN) {
+            wb_err("payload string too long (max %d bytes)\n",
+                PAYLOAD_SCAN_WIN);
+            return -EINVAL;
         }
     }
 
