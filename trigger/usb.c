@@ -48,12 +48,8 @@ MODULE_PARM_DESC(usb_devices, "VID:PID:EVENT (EVENT=insert|eject|any)");
 static int parse_usb_devices(void)
 {
     int i, j;
-    int limit = min(usb_devices_count, MAX_USB_DEVICES);
 
-    if (usb_devices_count > MAX_USB_DEVICES)
-        wb_warn("USB rules truncated to %d entries\n", MAX_USB_DEVICES);
-
-    for (i = 0; i < limit; i++) {
+    for (i = 0; i < usb_devices_count; i++) {
         unsigned int vid, pid;
         char buf[64];         // local bounded copy of param string
         char evt_str[16] = "any"; // default: "any", can be "eject" or "insert"
@@ -71,6 +67,11 @@ static int parse_usb_devices(void)
         n = sscanf(buf, "%x:%x:%15s", &vid, &pid, evt_str);
         if (n < 2) {
             wb_err("invalid USB rule '%s'\n", buf);
+            return -EINVAL;
+        }
+
+        if (vid > 0xffff || pid > 0xffff) {
+            wb_err("VID/PID out of range (max 0xffff) in rule '%s'\n", buf);
             return -EINVAL;
         }
 
@@ -116,11 +117,23 @@ static bool match_rules(u16 vid, u16 pid, unsigned long action)
 // USB notifier callback
 static int usb_notifier_callback(struct notifier_block *self, unsigned long action, void *dev)
 {
-    struct usb_device *udev = dev;
-    u16 vid = le16_to_cpu(udev->descriptor.idVendor);
-    u16 pid = le16_to_cpu(udev->descriptor.idProduct);
+    struct usb_device *udev;
+    u16 vid, pid;
 
-    bool matched = match_rules(vid, pid, action);
+    bool matched;
+
+    /*
+    * Only device notifications carry struct usb_device *.
+    * Bus notifications use a different payload type.
+    */
+    if (action != USB_DEVICE_ADD && action != USB_DEVICE_REMOVE)
+        return NOTIFY_OK;
+
+    udev = dev;
+    vid = le16_to_cpu(udev->descriptor.idVendor);
+    pid = le16_to_cpu(udev->descriptor.idProduct);
+
+    matched = match_rules(vid, pid, action);
 
     if ((usb_whitelist && !matched) || (!usb_whitelist && matched)) {
         wb_info("USB trigger fired (VID=0x%04x PID=0x%04x)\n", vid, pid);
