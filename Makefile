@@ -1,12 +1,8 @@
-obj-m := wrong8007.o
-wrong8007-objs := core.o trigger/keyboard.o trigger/usb.o trigger/network.o
 KDIR := /usr/lib/modules/$(shell uname -r)/build
-PWD := $(shell pwd)
-ccflags-y += -I$(src)/include
 
 # Default target: build the module
-default:
-	$(MAKE) -C $(KDIR) M=$(PWD) modules
+all:
+	$(MAKE) -C $(KDIR) M=$(CURDIR) modules
 
 # Load module with runtime params
 load:
@@ -48,9 +44,10 @@ remove:
 	sudo rmmod wrong8007.ko
 
 # Reload the module
-reload: remove default load
+reload: remove all load
 
 # Clean build artifacts
 clean:
-	$(MAKE) -C $(KDIR) M=$(PWD) clean
-	rm -f *.ko *.mod.* *.o Module.symvers modules.order
+	$(MAKE) -C $(KDIR) M=$(CURDIR) clean
+
+.PHONY: all load remove reload clean
