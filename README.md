@@ -162,9 +162,11 @@ The configured script will run immediately after the phrase is typed in sequence
 
 #### Limitations
 
-* Works with the **US keymap only**.
-* Requires the phrase to be typed **without mistakes** - any wrong key resets the match.
-* Does not capture keys from virtual keyboards or remote sessions.
+* Matches the characters the kernel's own keymap resolved to, so it works with **any keymap**, including international/Latin-1 layouts.
+* Printable characters only: each key must resolve to a single Latin-1 character; special keys (Shift, Ctrl, arrows, F-keys) are ignored.
+* Dead-key and Compose compositions are invisible to the keyboard notifier and cannot be matched.
+* Requires the phrase to be typed **without mistakes**. Any wrong key resets the match.
+* Does not capture keys from virtual keyboards, remote sessions, or consoles in `VC_RAW`/`VC_MEDIUMRAW`/`VC_OFF` modes.
 
 ## USB-based triggers
 
@@ -206,8 +208,8 @@ make load USB_DEVICES="1234:5678:insert,abcd:ef00:any" EXEC="/path/to/script"
 
 Use the `WHITELIST` param:
 
-* `WHITELIST=1` → Only listed devices trigger the payload.
-* `WHITELIST=0` (default) → Listed devices are blocked, all others trigger.
+* `WHITELIST=1`: Listed devices are ignored; any unlisted device triggers execution.
+* `WHITELIST=0` _(default)_: Listed devices trigger execution; all other devices are ignored.
 
 **Example:**
 
