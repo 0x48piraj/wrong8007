@@ -106,7 +106,12 @@ static bool parse_ip(const char *ip_str, __be32 *out)
 #endif
 }
 
-/* Heartbeat timer handler: read last_seen_jiffies under lock */
+/*
+ * Monitor heartbeat liveness.
+ *
+ * The trigger fires once the configured heartbeat has not been observed
+ * within the timeout window.
+ */
 static void hb_timer_fn(struct timer_list *t)
 {
     unsigned long now = jiffies;
@@ -117,11 +122,11 @@ static void hb_timer_fn(struct timer_list *t)
     last = last_seen_jiffies;
     spin_unlock_irqrestore(&hb_lock, flags);
 
-    if (time_after(now, last + heartbeat_timeout * HZ)) {
+    if (time_after(now, last + (unsigned long)heartbeat_timeout * HZ)) {
         wb_info("heartbeat timeout reached, scheduling exec\n");
         wrong8007_activate();
     } else {
-        mod_timer(&hb_timer, jiffies + heartbeat_interval * HZ);
+        mod_timer(&hb_timer, jiffies + (unsigned long)heartbeat_interval * HZ);
     }
 }
 
@@ -149,10 +154,10 @@ static void *k_memmem(const void *haystack, size_t haystack_len,
 }
 
 /*
- * Scan the packet payload for the magic string without assuming the payload
- * is contiguous in the skb linear area.
- * The payload is read into a bounded stack buffer in overlapping windows so a
- * needle straddling a window boundary is still found.
+ * Search a packet payload for the configured magic string.
+ *
+ * Payloads may span fragmented skbs, so matching operates on copied
+ * windows rather than assuming a contiguous linear buffer.
  */
 static bool payload_contains(const struct sk_buff *skb, size_t offset,
                              size_t payload_size, const char *needle,
@@ -224,6 +229,14 @@ static unsigned int nf_hook_fn(void *priv,
 
     iph = ip_hdr(skb); /* refresh pointer after pskb_may_pull */
 
+    /* Refresh heartbeat liveness before evaluating trigger conditions. */
+    if (heartbeat_host && iph->saddr == heartbeat_ip_addr) {
+        unsigned long flags;
+        spin_lock_irqsave(&hb_lock, flags);
+        last_seen_jiffies = jiffies;
+        spin_unlock_irqrestore(&hb_lock, flags);
+    }
+
     /* L2 / MAC match: validate MAC header before using eth_hdr() */
     if (match_mac) {
         if (!skb_mac_header_was_set(skb) || skb->mac_len < ETH_HLEN)
@@ -241,14 +254,6 @@ static unsigned int nf_hook_fn(void *priv,
     /* L3 / IP match */
     if (match_ip && iph->saddr != match_ip_addr)
         goto out;
-
-    /* Heartbeat tracking: update last_seen_jiffies under lock */
-    if (heartbeat_host && iph->saddr == heartbeat_ip_addr) {
-        unsigned long flags;
-        spin_lock_irqsave(&hb_lock, flags);
-        last_seen_jiffies = jiffies;
-        spin_unlock_irqrestore(&hb_lock, flags);
-    }
 
     /* L4 / Payload matching */
     if (match_port || match_payload) {
@@ -369,12 +374,24 @@ static int trigger_network_init(void)
             wb_err("invalid heartbeat host IP\n");
             return -EINVAL;
         }
+        if (heartbeat_interval < 1) {
+            wb_err("heartbeat_interval must be >= 1 second\n");
+            return -EINVAL;
+        }
+        if (heartbeat_timeout <= heartbeat_interval) {
+            wb_err("heartbeat_timeout must be greater than heartbeat_interval\n");
+            return -EINVAL;
+        }
+        if (heartbeat_interval > ULONG_MAX / HZ || heartbeat_timeout > ULONG_MAX / HZ) {
+            wb_err("heartbeat interval/timeout too large\n");
+            return -EINVAL;
+        }
         unsigned long flags;
         spin_lock_irqsave(&hb_lock, flags);
         last_seen_jiffies = jiffies;
         spin_unlock_irqrestore(&hb_lock, flags);
         timer_setup(&hb_timer, hb_timer_fn, 0);
-        mod_timer(&hb_timer, jiffies + heartbeat_interval * HZ);
+        mod_timer(&hb_timer, jiffies + (unsigned long)heartbeat_interval * HZ);
     }
 
     /* Install Netfilter hook */
