@@ -9,7 +9,8 @@
  * No dependency beyond libc.
  */
 
-#define _GNU_SOURCE
+/* Request POSIX.1-2008 interfaces */
+#define _POSIX_C_SOURCE 200809L
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdarg.h>
