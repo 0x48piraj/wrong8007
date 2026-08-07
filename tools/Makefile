@@ -1,5 +1,5 @@
 CC       ?= cc
-CFLAGS   ?= -std=c11 -Wall -Wextra -Wformat=2 -O2
+CFLAGS   ?= -std=c11 -Wall -Wextra -Wformat=2 -Wpedantic -pedantic -O2
 PREFIX   ?= /usr/local
 BINDIR   := $(PREFIX)/bin
 
