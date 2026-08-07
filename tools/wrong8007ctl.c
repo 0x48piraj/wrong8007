@@ -64,6 +64,22 @@ static void die(const char *fmt, ...)
     exit(1);
 }
 
+static void install_signal_handlers(void)
+{
+    struct sigaction sa = {
+        .sa_handler = on_sigint,
+    };
+
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = 0;
+
+    if (sigaction(SIGINT, &sa, NULL) < 0)
+        die("sigaction(SIGINT): %s", strerror(errno));
+
+    if (sigaction(SIGTERM, &sa, NULL) < 0)
+        die("sigaction(SIGTERM): %s", strerror(errno));
+}
+
 /*
  * Parse a decimal integer within the supplied bounds.
  */
@@ -174,8 +190,7 @@ static int cmd_heartbeat(int argc, char **argv)
     struct sockaddr_in dst;
     int fd = udp_open(ip, port, &dst);
 
-    signal(SIGINT, on_sigint);
-    signal(SIGTERM, on_sigint);
+    install_signal_handlers();
 
     fprintf(stderr, "[+] heartbeat -> %s:%d every %ds (message=\"%s\")\n", ip, port, interval, message);
     fprintf(stderr, "    Ctrl-C to stop.\n\n");
