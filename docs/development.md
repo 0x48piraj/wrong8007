@@ -7,7 +7,7 @@ It assumes familiarity with:
 - Linux kernel development
 - Loadable Kernel Modules (LKM)
 - Kernel-level event and interception mechanisms, including notifier chains, Netfilter and USB device notifications
-- Project's [design philosophy](design.md) and [security model](security-model.md).
+- Project's [design philosophy](manifesto.md) and [security model](security-model.md).
 
 Payload behavior and data-destruction strategies are intentionally outside the scope of this document. See [Data destruction & Wiping rationale](dd.md) for discussion of those topics.
 
