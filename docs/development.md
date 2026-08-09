@@ -15,7 +15,11 @@ PRs that violate the project's execution model, trust boundaries, lifecycle and 
 
 ## Architecture
 
-**`wrong8007`** follows a **core + trigger** architecture.
+Wrong Boot follows a small core, pluggable trigger architecture.
+
+<p align="center">
+  <img width="708" height="440" src="https://github.com/user-attachments/assets/d0bb5624-77b1-45d7-bff8-8adb7a45859a" alt="system architecture" />
+</p>
 
 The core owns execution and lifecycle management. Triggers are independent event sources that detect conditions and request activation through a single core-owned interface.
 
@@ -44,6 +48,8 @@ flowchart LR
     class C core
     class P user
 ```
+
+This separation keeps individual triggers focused while allowing the execution model to evolve independently.
 
 ### Responsibilities of the core
 
@@ -450,7 +456,7 @@ Recommended workflow:
 6. Test activation in isolation.
 7. Test concurrent activation with another trigger.
 8. Validate module removal with `rmmod`.
-9. Test the behavior of `rmmod` after activation, including a payload that takes measurable time to complete.
+9. Verify repeated and concurrent activation attempts preserve one-shot behavior.
 10. Combine the new trigger with existing triggers only after its isolated behavior is understood.
 
 A trigger should be tested both for the condition that activates it and for the conditions that must **not** activate it.
@@ -474,50 +480,10 @@ If your trigger is hard to reason about, it **does not** belong here.
 
 New triggers must preserve the core execution model:
 
-```mermaid
-flowchart LR
-    subgraph TRIGGERS["Trigger sources"]
-        K["Keyboard"]
-        U["USB"]
-        N["Network"]
-    end
+- The trigger decides _whether its own condition has occurred_.
+- The core decides _whether execution is still armed and how execution is performed_.
 
-    A["wrong8007_activate()"]
-    L{"Execution latch"}
-    W["Core-owned<br/>exec_work"]
-    H["call_usermodehelper()"]
-    P["Userspace payload"]
-    X["No action"]
-
-    K --> A
-    U --> A
-    N --> A
-
-    A --> L
-    L -->|first caller| W
-    L -->|subsequent callers| X
-
-    W --> H
-    H --> P
-
-    classDef trigger fill:#f3f0ea,stroke:#8a8175,color:#292724
-    classDef core fill:#e9eef2,stroke:#657786,color:#202a30
-    classDef gate fill:#f4ead2,stroke:#a4874a,color:#3d321f
-    classDef user fill:#e4efec,stroke:#648b83,color:#243a36
-    classDef inactive fill:#f1f1f0,stroke:#aaa9a5,color:#777570
-
-    class K,U,N trigger
-    class A,W core
-    class L gate
-    class H,P user
-    class X inactive
-```
-
-The trigger decides **whether its own condition has occurred**.
-
-The core decides **whether execution is still armed and how execution is performed**.
-
-That separation is the central architectural contract of `wrong8007`.
+That separation is the central architectural contract of the project.
 
 ## Trigger-specific notes
 
