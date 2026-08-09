@@ -1,34 +1,85 @@
 # Development guide
 
-This document explains how **`wrong8007`** is structured internally and how to extend it by contributing new triggers in a clean, maintainable way.
+This document explains how **`wrong8007`** is structured internally and how to extend it by contributing new triggers in a maintainable way.
 
 It assumes familiarity with:
 
 - Linux kernel development
 - Loadable Kernel Modules (LKM)
-- Basic kernel subsystems (notifiers, netfilter, USB, etc.)
+- Kernel-level event and interception mechanisms, including notifier chains, Netfilter and USB device notifications
 - Project's [design philosophy](design.md) and [security model](security-model.md).
 
-Payload behavior and forensic considerations are intentionally out of scope for this document. See [Data destruction & Wiping rationale](dd.md) for guidance on wipe strategies.
+Payload behavior and data-destruction strategies are intentionally outside the scope of this document. See [Data destruction & Wiping rationale](dd.md) for discussion of those topics.
+
+PRs that violate the project's execution model, trust boundaries, lifecycle and safety guarantees will not be accepted.
 
 ## Architecture
 
-**`wrong8007`** follows a **core + plugin trigger** architecture.
+**`wrong8007`** follows a **core + trigger** architecture.
 
-### Responsibilities of the `core`
+The core owns execution and lifecycle management. Triggers are independent event sources that detect conditions and request activation through a single core-owned interface.
 
-- Module initialization and teardown
-- Parameter validation
-- Deferred execution via workqueue
-- User-mode execution (`call_usermodehelper`)
+```mermaid
+flowchart LR
+    subgraph SOURCES["Trigger sources"]
+        K["Keyboard"]
+        U["USB"]
+        N["Network"]
+    end
 
-### Role of `triggers`
+    C["Execution core"]
+    P["Userspace payload"]
 
-- Detect a specific condition
-- Decide *if* a trigger should fire
-- Notify the core (never execute directly)
+    K --> C
+    U --> C
+    N --> C
 
-Triggers are intentionally **stateless or minimally stateful**.
+    C --> P
+
+    classDef source fill:#f7f7f6,stroke:#555,color:#222
+    classDef core fill:#e9eef2,stroke:#657786,color:#202a30
+    classDef user fill:#e4efec,stroke:#648b83,color:#243a36
+
+    class K,U,N source
+    class C core
+    class P user
+```
+
+### Responsibilities of the core
+
+The core module (`wrong8007.c`) is responsible for:
+
+* Validating and storing core module parameters
+* Initializing and tearing down registered triggers
+* Maintaining the global execution state
+* Arbitrating competing trigger activations
+* Scheduling deferred execution through `exec_work`
+* Invoking the configured userspace command through the [User Mode Helper API](https://www.kernel.org/doc/html/v4.13/core-api/kernel-api.html#c.call_usermodehelper_exec)
+* Rolling back trigger initialization if module loading fails
+* Flushing pending execution work during module unload
+
+### Responsibilities of triggers
+
+Each trigger is responsible for:
+
+* Registering with the relevant kernel subsystem
+* Validating trigger-specific configuration
+* Maintaining any state required to detect its condition
+* Evaluating incoming events
+* Calling `wrong8007_activate()` when its condition is satisfied
+* Unregistering its hooks and freeing its state during teardown
+
+A trigger **must not own execution policy**.
+
+In particular, triggers must not:
+
+* Call `schedule_work(&exec_work)`
+* Call `call_usermodehelper()` directly
+* Execute the configured payload themselves
+* Modify the global execution latch
+* Depend on another trigger being enabled
+
+The core is the sole owner of execution arbitration and deferred execution.
 
 ## Trigger interface
 
@@ -42,30 +93,211 @@ struct wrong8007_trigger {
 };
 ```
 
-> **Note:** Triggers must remain detection-only. **Execution policy** lives exclusively in the `core` module.
+> The interface intentionally contains only initialization and teardown operations. Runtime activation is performed through the core's `wrong8007_activate()` function.
 
-### Rules
+### Trigger lifecycle
 
-* `init()` must return 0 on success
-* `exit()` must be safe to call even if `init()` partially failed
-* Triggers must not assume other triggers are present
-* Triggers must not execute user-space code directly
+A trigger's `init()` function should:
 
-## Scheduling execution
+1. Validate its configuration.
+2. Allocate and initialize any required state.
+3. Register its kernel hooks or notifiers.
+4. Return `0` only when the trigger is ready for use.
 
-Triggers **must not** call `call_usermodehelper()` directly.
+A non-zero return value means initialization failed.
 
-Instead, triggers schedule deferred execution:
+The core treats trigger initialization failure as a module-load failure and rolls back previously initialized triggers.
+
+A trigger's `exit()` function should:
+
+1. Unregister its kernel hooks/notifiers.
+2. Stop or delete timers and other asynchronous sources.
+3. Free trigger-owned memory.
+4. Leave no active callback pointing at module-owned state.
+
+`exit()` must be safe for the lifecycle state actually reached by `init()`.
+
+## Activation and one-shot execution
+
+Triggers do **not** schedule the execution work directly.
+
+When a trigger detects its configured condition, it calls:
 
 ```c
-schedule_work(&exec_work);
+wrong8007_activate();
 ```
 
-This ensures:
+The core owns the activation decision and uses an atomic execution latch:
 
-* Correct execution context
-* Safe interaction with kernel subsystems
-* Consistent behavior across triggers
+```c
+void wrong8007_activate(void)
+{
+    if (atomic_cmpxchg(&exec_armed, 1, 0) == 1)
+        schedule_work(&exec_work);
+}
+```
+
+This provides the module's one-shot guarantee.
+
+### First trigger wins
+
+The module starts armed:
+
+```text
+exec_armed = 1
+```
+
+All triggers converge on the same activation path. The first caller atomically consumes the latch and schedules the work; concurrent or subsequent callers are rejected.
+
+```mermaid
+flowchart LR
+    subgraph TRIGGERS["Concurrent triggers"]
+        K["Keyboard"]
+        U["USB"]
+        N["Network"]
+    end
+
+    A["Activation request"]
+    G{"Atomic latch<br/>compare-and-exchange"}
+    W["exec_armed = 0<br/>schedule exec_work"]
+    D["exec_armed = 0<br/>activation rejected"]
+
+    K --> A
+    U --> A
+    N --> A
+
+    A --> G
+    G -->|CAS succeeds| W
+    G -->|CAS fails| D
+
+    classDef trigger fill:#f3f0ea,stroke:#8a8175,color:#292724
+    classDef core fill:#e9eef2,stroke:#657786,color:#202a30
+    classDef gate fill:#f4ead2,stroke:#a4874a,color:#3d321f
+    classDef reject fill:#f1f1f0,stroke:#aaa9a5,color:#777570
+
+    class K,U,N trigger
+    class A,W core
+    class G gate
+    class D reject
+```
+
+The latch is therefore owned by the core rather than by individual trigger implementations. Multiple triggers may request activation concurrently, but only one can consume the execution latch.
+
+## Deferred execution
+
+Trigger callbacks may run in interrupt, atomic, notifier, or softirq-related contexts where sleeping and userspace process creation are not appropriate.
+
+Triggers therefore only request activation:
+
+```c
+wrong8007_activate();
+```
+
+Once activation has been accepted, execution is deferred to the core's work item:
+
+```mermaid
+flowchart LR
+    W["Deferred work"]
+    C["Process context"]
+    H["User Mode Helper"]
+    P["Userspace payload"]
+
+    W --> C
+    C --> H
+    H --> P
+
+    classDef core fill:#e9eef2,stroke:#657786,color:#202a30
+    classDef helper fill:#f3f0ea,stroke:#8a8175,color:#292724
+    classDef user fill:#e4efec,stroke:#648b83,color:#243a36
+
+    class W,C core
+    class H helper
+    class P user
+```
+
+The work item runs in process context on the kernel's system workqueue, allowing the execution path to perform operations that are not appropriate from trigger callbacks.
+
+The configured payload is therefore **never executed directly from a trigger callback**.
+
+### User-mode execution
+
+The core invokes the configured command through `/bin/sh`:
+
+```mermaid
+flowchart LR
+    W["exec_work"]
+    Q["system_wq"]
+    D["do_exec_work()"]
+    S["call_usermodehelper_setup()"]
+    E["call_usermodehelper_exec()<br/>UMH_WAIT_PROC"]
+    P["/bin/sh -c &lt;exec_buf&gt;"]
+
+    W --> Q
+    Q --> D
+    D --> S
+    S --> E
+    E --> P
+
+    classDef core fill:#e9eef2,stroke:#657786,color:#202a30
+    classDef helper fill:#f3f0ea,stroke:#8a8175,color:#292724
+    classDef user fill:#e4efec,stroke:#648b83,color:#243a36
+
+    class W,Q,D core
+    class S,E helper
+    class P user
+```
+
+The environment is intentionally minimal:
+
+```bash
+HOME=/
+PATH=/sbin:/bin:/usr/sbin:/usr/bin
+```
+
+The User Mode Helper invocation uses `UMH_WAIT_PROC`, so the kernel worker executing `exec_work` waits for the userspace command to finish.
+
+> [!CAUTION]
+> This has an important operational consequence: a payload that never terminates can keep the execution work item running indefinitely.
+
+## Module lifecycle
+
+### Load
+
+During module initialization, the core:
+
+1. Validates and copies the configured execution command.
+2. Initializes the execution latch to the armed state.
+3. Initializes each registered trigger in sequence.
+4. Aborts loading if any trigger fails.
+
+If a trigger fails to initialize, previously initialized triggers are torn down and allocated state is released before module initialization returns an error.
+
+This provides a fail-closed initialization path: the module does not remain partially active when it cannot initialize all requested components.
+
+### Runtime
+
+Once initialization succeeds, triggers wait for events from their respective kernel subsystems.
+
+Triggers may maintain internal state when necessary. For example:
+
+* The keyboard trigger maintains phrase-matching state;
+* The network trigger maintains heartbeat timing state;
+* USB maintains parsed device rules.
+
+The trigger framework is therefore **not strictly stateless**. The important architectural property is that trigger state remains local to the trigger and does not control execution policy.
+
+### Unload
+
+During module removal, the core:
+
+1. Calls each trigger's `exit()` function.
+2. Unregisters trigger hooks and stops asynchronous trigger activity.
+3. Flushes `exec_work`.
+4. Frees core-owned memory.
+
+`flush_work(&exec_work)` waits for an already-running execution work item to finish.
+
+Consequently, unloading the module while the configured payload is still running can block until that payload exits.
 
 ## Designing a new trigger
 
@@ -84,7 +316,7 @@ Include only what you need:
 #include <wrong8007.h>
 ```
 
-### 2. Implement `init` / `exit`
+### 2. Implement initialization and teardown
 
 ```c
 static int trigger_example_init(void)
@@ -99,7 +331,36 @@ static void trigger_example_exit(void)
 }
 ```
 
-### 3. Expose the trigger
+Initialization should not report success until all resources required by the trigger have been successfully established.
+
+### 3. Implement event detection
+
+A runtime callback should detect its condition and request activation through the core:
+
+```c
+if (condition_matches)
+    wrong8007_activate();
+```
+
+Do **not** call:
+
+```c
+schedule_work(&exec_work);
+```
+
+from the trigger.
+
+Do **not** call:
+
+```c
+call_usermodehelper(...);
+```
+
+from the trigger.
+
+The trigger only reports that its condition has been met.
+
+### 4. Expose the trigger
 
 ```c
 struct wrong8007_trigger example_trigger = {
@@ -109,9 +370,9 @@ struct wrong8007_trigger example_trigger = {
 };
 ```
 
-### 4. Register the trigger with the `core`
+### 5. Register the trigger with the core
 
-Add it to the trigger list:
+Add the trigger to the core's trigger list:
 
 ```c
 extern struct wrong8007_trigger example_trigger;
@@ -124,14 +385,18 @@ static struct wrong8007_trigger *triggers[] = {
 };
 ```
 
+The core then owns the trigger's initialization and teardown as part of the module lifecycle.
+
 ## Parameter handling
 
 Triggers may define module parameters, but must follow these rules:
 
-* Validate parameters in `init()`
-* Fail module load on invalid input
-* Do not modify parameters after initialization
-* Prefer strict parsing over permissive behavior
+* Validate trigger-specific parameters during `init()`.
+* Return an error for invalid configuration.
+* Do not silently reinterpret malformed configuration.
+* Prefer strict parsing over permissive behavior.
+* Allocate derived state during initialization rather than repeatedly parsing configuration in hot paths.
+* Release all trigger-owned allocations during teardown.
 
 Example:
 
@@ -140,46 +405,119 @@ if (!param || !*param)
     return -EINVAL;
 ```
 
-## Memory & Context rules
+## Memory and context rules
 
-Triggers must:
+Trigger callbacks may execute in contexts where sleeping is forbidden.
 
-* Avoid sleeping in atomic context
-* Avoid allocation in hot paths
-* Free all allocated memory in `exit()`
-* Handle repeated init/exit safely
+Trigger implementations must therefore:
+
+* Avoid sleeping in atomic or interrupt context;
+* Avoid operations that may block from hot-path callbacks;
+* Avoid unnecessary dynamic allocation in event callbacks;
+* Keep callback work small;
+* Defer process-context work to the core;
+* Free trigger-owned allocations during teardown;
+* Ensure asynchronous callbacks cannot access freed state after `exit()` returns.
+
+If a trigger requires substantial processing or a blocking operation, it should introduce an appropriate deferred mechanism rather than performing that work directly in the event callback.
 
 ## Logging guidelines
 
-Use project logging macros:
+Use the project's logging macros consistently:
 
-| Macro     | Usage                               |
-| --------- | ----------------------------------- |
-| `wb_dbg`  | Development-only debug output       |
-| `wb_info` | Initialization and lifecycle events |
-| `wb_warn` | Recoverable configuration issues    |
-| `wb_err`  | Fatal initialization errors         |
+| Macro     | Usage                                               |
+| --------- | --------------------------------------------------- |
+| `wb_dbg`  | Development and diagnostic output                   |
+| `wb_info` | Informational initialization and lifecycle messages |
+| `wb_warn` | Recoverable or potentially unsafe conditions        |
+| `wb_err`  | Initialization or runtime errors                    |
 
-Triggers must not log after execution is scheduled.
+Logging is not guaranteed to stop after activation.
+
+The execution path itself records the result of the userspace helper after it returns and debug logging may expose additional trigger or execution information.
+
+Avoid logging sensitive configuration values unless there is a clear debugging reason to do so.
 
 ## Testing new triggers
 
 Recommended workflow:
 
-1. Load module with only your trigger enabled
-2. Verify `init`/`exit` behavior
-3. Test trigger activation in isolation
-4. Validate unload safety (`rmmod`)
-5. Combine with other triggers last
+1. Build the module.
+2. Load it with only the new trigger enabled, preferably.
+3. Verify successful initialization.
+4. Verify invalid configuration causes initialization failure.
+5. Verify `exit()` unregisters all resources cleanly.
+6. Test activation in isolation.
+7. Test concurrent activation with another trigger.
+8. Validate module removal with `rmmod`.
+9. Test the behavior of `rmmod` after activation, including a payload that takes measurable time to complete.
+10. Combine the new trigger with existing triggers only after its isolated behavior is understood.
+
+A trigger should be tested both for the condition that activates it and for the conditions that must **not** activate it.
 
 ## Code style
 
-* Follow kernel coding style
-* Prefer clarity over cleverness
-* Document non-obvious behavior
-* Treat this repository as reference-quality code
+Follow Linux kernel coding conventions.
+
+Prefer:
+
+* Well-defined ownership;
+* Clear control flow;
+* Small callbacks;
+* Strict validation;
+* No coupling between triggers;
+* Comments for non-obvious kernel behavior.
 
 If your trigger is hard to reason about, it **does not** belong here.
+
+## Design constraints for contributors
+
+New triggers must preserve the core execution model:
+
+```mermaid
+flowchart LR
+    subgraph TRIGGERS["Trigger sources"]
+        K["Keyboard"]
+        U["USB"]
+        N["Network"]
+    end
+
+    A["wrong8007_activate()"]
+    L{"Execution latch"}
+    W["Core-owned<br/>exec_work"]
+    H["call_usermodehelper()"]
+    P["Userspace payload"]
+    X["No action"]
+
+    K --> A
+    U --> A
+    N --> A
+
+    A --> L
+    L -->|first caller| W
+    L -->|subsequent callers| X
+
+    W --> H
+    H --> P
+
+    classDef trigger fill:#f3f0ea,stroke:#8a8175,color:#292724
+    classDef core fill:#e9eef2,stroke:#657786,color:#202a30
+    classDef gate fill:#f4ead2,stroke:#a4874a,color:#3d321f
+    classDef user fill:#e4efec,stroke:#648b83,color:#243a36
+    classDef inactive fill:#f1f1f0,stroke:#aaa9a5,color:#777570
+
+    class K,U,N trigger
+    class A,W core
+    class L gate
+    class H,P user
+    class X inactive
+```
+
+The trigger decides **whether its own condition has occurred**.
+
+The core decides **whether execution is still armed and how execution is performed**.
+
+That separation is the central architectural contract of `wrong8007`.
 
 ## Trigger-specific notes
 

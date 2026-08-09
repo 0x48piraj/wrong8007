@@ -1,14 +1,14 @@
 # Wrong Boot
 
-**Wrong Boot** (*codename: `wrong8007`*) is a **programmable dead man's switch** for Linux, living entirely in kernel space. Think of it as the software equivalent of a burner phone **OR** a modular kernel trigger framework for last-resort execution.
+**Wrong Boot** (*codename: `wrong8007`*) is a **programmable dead man's switch** for Linux, triggered by events observed inside the kernel.
 
-Inspired by the [USBKill](https://github.com/hephaest0s/usbkill) project, Wrong Boot rethinks the idea as a modular Linux kernel module. Triggers are independent of execution, allowing the same core to support different activation mechanisms while leaving payloads entirely user-defined.
+Inspired by the [USBKill](https://github.com/hephaest0s/usbkill) project from 2016, Wrong Boot rethinks the idea as a modular Linux kernel module. Triggers are independent of execution, allowing the same core to support different activation mechanisms while leaving payloads entirely user-defined.
 
 This project was revisited and expanded in memory of **[Mark Klein](https://en.wikipedia.org/wiki/Mark_Klein)** (May 2, 1945 - March 8, 2025), the AT&T technician who, in 2006, revealed the existence of warrantless mass surveillance (Secrets of [Room 641A](https://en.wikipedia.org/wiki/Room_641A)) by the NSA.
 
 Systems can be seized, inspected, or tampered with in seconds. By then, the opportunity to decide may already be gone. What remains is the decision you made *beforehand*.
 
-Wrong Boot exists for those situations. It monitors predefined conditions from within the kernel and executes the response you chose before that moment arrived.
+Wrong Boot exists for those situations. It monitors predefined conditions from within the kernel and executes the response you chose _before that moment arrived_.
 
 <p align="center">
   <img src="https://github.com/user-attachments/assets/d5a0bb9e-a23e-46f8-af5f-bb8e01277dca" alt="demo gif">
@@ -22,14 +22,10 @@ Wrong Boot exists for those situations. It monitors predefined conditions from w
   <a href="docs/manifesto.md">Philosophy</a>
 </p>
 
-## Features
-
-* **Kernel-space monitoring**: Zero user-space dependencies; works even if most of the system is compromised.
-* **Multiple trigger types**: Phrase detection, USB events, network packets all extendable by design.
+* **Kernel-space monitoring**: Trigger conditions are evaluated directly by kernel subsystem hooks rather than by a userspace polling daemon.
+* **Pluggable trigger framework**: Phrase detection, USB events, network packets all extendable by design.
 * **Operator-defined execution**: Run any script or binary, from data wipes to custom logic.
 * **Fail-closed design**: Invalid configurations prevent module load rather than causing undefined behavior.
-* **Fast & silent**: Triggers execution instantly, without relying on cron jobs or user-space daemons.
-* **Modular**: Clean separation between core logic and triggers.
 
 ## Design
 
@@ -148,8 +144,11 @@ make load USB_DEVICES="1234:5678:insert,abcd:ef00:any" EXEC="/path/to/script"
 
 Use the `WHITELIST` param:
 
-* `WHITELIST=1`: Listed devices are ignored; any unlisted device triggers execution.
 * `WHITELIST=0` _(default)_: Listed devices trigger execution; all other devices are ignored.
+* `WHITELIST=1`: Listed devices are ignored; any non-matching add/remove event triggers execution.
+
+> [!CAUTION]
+> Whitelist mode is intentionally broad. Unlisted USB activity may trigger execution unexpectedly.
 
 **Example:**
 
@@ -246,14 +245,13 @@ Before contributing, please read:
 - [Development guide](docs/development.md)
 - [Security model](docs/security-model.md)
 
-PRs that violate the project's trust boundaries or safety guarantees will not be accepted.
-
-## Data destruction notes
+## Payload design
 
 **Wrong Boot** defines *when* execution occurs, not *what* is executed.
 
 For operators designing their wipe or sanitization payloads, see:
-- [Data destruction & Wiping rationale](docs/dd.md): Covers common myths, modern research and practical tooling for effective data sanitization.
+
+- [Data destruction & Wiping](docs/dd.md): Explores the common myths, historical standards, research and practical techniques for data sanitization.
 
 ### Who this project is for
 
