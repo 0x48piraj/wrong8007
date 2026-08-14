@@ -17,12 +17,6 @@ PRs that violate the project's execution model, trust boundaries, lifecycle and 
 
 Wrong Boot follows a small core, pluggable trigger architecture.
 
-<p align="center">
-  <img width="708" height="440" src="https://github.com/user-attachments/assets/d0bb5624-77b1-45d7-bff8-8adb7a45859a" alt="system architecture" />
-</p>
-
-The core owns execution and lifecycle management. Triggers are independent event sources that detect conditions and request activation through a single core-owned interface.
-
 ```mermaid
 flowchart LR
     subgraph SOURCES["Trigger sources"]
@@ -48,6 +42,8 @@ flowchart LR
     class C core
     class P user
 ```
+
+The core owns execution and lifecycle management. Triggers are independent event sources that detect conditions and request activation through a single core-owned interface.
 
 This separation keeps individual triggers focused while allowing the execution model to evolve independently.
 
@@ -286,9 +282,9 @@ Once initialization succeeds, triggers wait for events from their respective ker
 
 Triggers may maintain internal state when necessary. For example:
 
-* The keyboard trigger maintains phrase-matching state;
-* The network trigger maintains heartbeat timing state;
-* USB maintains parsed device rules.
+* The keyboard trigger maintains phrase-matching state
+* The network trigger maintains heartbeat timing state
+* USB maintains parsed device rules
 
 The trigger framework is therefore **not strictly stateless**. The important architectural property is that trigger state remains local to the trigger and does not control execution policy.
 
@@ -417,13 +413,13 @@ Trigger callbacks may execute in contexts where sleeping is forbidden.
 
 Trigger implementations must therefore:
 
-* Avoid sleeping in atomic or interrupt context;
-* Avoid operations that may block from hot-path callbacks;
-* Avoid unnecessary dynamic allocation in event callbacks;
-* Keep callback work small;
-* Defer process-context work to the core;
-* Free trigger-owned allocations during teardown;
-* Ensure asynchronous callbacks cannot access freed state after `exit()` returns.
+* Avoid sleeping in atomic or interrupt context
+* Avoid operations that may block from hot-path callbacks
+* Avoid unnecessary dynamic allocation in event callbacks
+* Keep callback work small
+* Defer process-context work to the core
+* Free trigger-owned allocations during teardown
+* Ensure asynchronous callbacks cannot access freed state after `exit()` returns
 
 If a trigger requires substantial processing or a blocking operation, it should introduce an appropriate deferred mechanism rather than performing that work directly in the event callback.
 
@@ -467,14 +463,13 @@ Follow Linux kernel coding conventions.
 
 Prefer:
 
-* Well-defined ownership;
-* Clear control flow;
-* Small callbacks;
-* Strict validation;
-* No coupling between triggers;
-* Comments for non-obvious kernel behavior.
+* Well-defined ownership
+* Clear control flow
+* Strict validation
+* No coupling between triggers
+* Comments for non-obvious kernel behavior
 
-If your trigger is hard to reason about, it **does not** belong here.
+If a trigger is hard to reason about in isolation, it is not ready to be included yet.
 
 ## Design constraints for contributors
 

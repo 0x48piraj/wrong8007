@@ -90,16 +90,14 @@ The action is then handed back to user space through the kernel's User Mode Help
 
 This creates an intentional asymmetry:
 
-* **Detection and activation** are handled by the kernel.
-* **The configured consequence** is executed in user space.
+* Detection and activation are handled by the kernel.
+* The configured consequence is executed in user space.
 
 The configured action therefore inherits the privileges and execution environment of the User Mode Helper path and should be treated as a high-privilege operation.
 
-The activation latch and deferred execution mechanics are described in [development.md](development.md).
-
 ## One-shot execution guarantee
 
-All triggers converge on a single execution latch. At most one activation can consume it, even when multiple triggers activate concurrently.
+All triggers converge on a single execution latch. At most one activation can consume it even when multiple triggers activate concurrently.
 
 ```mermaid
 flowchart LR
@@ -121,7 +119,25 @@ flowchart LR
 
 The result is an **at-most-once execution guarantee**, not a guarantee that every trigger condition will be observed.
 
-The atomic latch and execution path are described in [development.md](development.md).
+The activation latch and deferred execution mechanics are described in [development](development.md).
+
+## Module unload and payload lifetime
+
+The configured action is not detached from the module's lifecycle.
+
+Because the execution work uses `UMH_WAIT_PROC`, the work item remains active while the spawned user-space command is running.
+
+During module removal, the core flushes the execution work:
+
+```c
+flush_work(&exec_work);
+```
+
+Therefore, removing the module while its configured action is still executing can block until that action terminates.
+
+This is an operational consequence of the execution model rather than a recovery mechanism.
+
+Operators should test payload termination behavior before relying on module removal as part of an incident-response procedure.
 
 ## Interception position
 
@@ -165,24 +181,6 @@ The payload inherits the privileges and execution context of the User Mode Helpe
 
 In particular, a malicious, accidental or poorly tested command can cause significant system impact.
 
-## Module unload and payload lifetime
-
-The configured action is not detached from the module's lifecycle.
-
-Because the execution work uses `UMH_WAIT_PROC`, the work item remains active while the spawned user-space command is running.
-
-During module removal, the core flushes the execution work:
-
-```c
-flush_work(&exec_work);
-```
-
-Therefore, removing the module while its configured action is still executing can block until that action terminates.
-
-This is an operational consequence of the execution model rather than a separate recovery mechanism.
-
-Operators should test payload termination behavior before relying on module removal as part of an incident-response procedure.
-
 ## Guarantees and limitations
 
 Wrong Boot provides architectural guarantees, but its behavior still depends on the kernel, the surrounding system and the configured payload.
@@ -219,9 +217,8 @@ Wrong Boot does not protect against:
 * Failure or unintended behavior of the configured payload
 * Physical loss, destruction, or power-off of the machine
 * Confidentiality loss of module parameters or diagnostic information
-* General system-security failures outside the module's scope
 
-Wrong Boot is not a replacement for system hardening, access control, monitoring, or incident response.
+Any general system-security failures outside the module's scope.
 
 ## Non-goals
 
@@ -235,7 +232,6 @@ Wrong Boot is not intended to:
 * Act as a general security-monitoring framework
 * Guarantee that an arbitrary payload is safe
 * Modify kernel memory outside its own scope
-* Replace normal system hardening, access control, monitoring or incident-response mechanisms
 
 If you are looking for covert channels, or evasion techniques, this project is **not for you**.
 

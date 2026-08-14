@@ -16,10 +16,10 @@ Wrong Boot chooses the kernel as its event-detection and enforcement boundary be
 
 User space may be:
 
-* Unavailable;
-* Compromised;
-* Misconfigured;
-* Intentionally stopped; or
+* Unavailable,
+* Compromised,
+* Misconfigured,
+* Intentionally stopped or
 * Simply too late to respond.
 
 For that reason, trigger detection lives entirely in kernel space and relies on existing kernel subsystems rather than long-running daemons or polling loops.
@@ -111,7 +111,6 @@ The project therefore favors:
 * Clear ownership
 * Clean state transitions
 * Strict configuration
-* Small event handlers
 * Nominal coupling
 * Straightforward control flow
 * Well-defined lifecycle behavior
@@ -177,13 +176,13 @@ The implementation _may change_. The design constraints _should not_.
 When changing Wrong Boot, keep these boundaries intact:
 
 * **Decide before the incident.** If an event matters, detect it where it can still be observed and acted on.
-* **Keep detection and execution separate.** Triggers report conditions; the core owns execution.
+* **Keep detection and execution separate.** Triggers report conditions, the core owns execution.
 * **Keep execution policy centralized.** New triggers should not implement their own execution paths.
 * **Fail closed.** If a trigger cannot establish the resources it needs, initialization should fail rather than leave a partially working trigger behind.
 * **Keep it simple, stupid.** Prefer simple control flow and predictable behavior.
 * **Limit assumptions.** A trigger should depend only on what it actually needs from the surrounding system.
 * **Keep triggers independent.** Adding one trigger should not require changes to unrelated triggers.
-* **Leave the action to the operator.** Wrong Boot provides the mechanism; the configured payload determines what happens.
+* **Leave the action to the operator.** Wrong Boot provides the mechanism, the configured payload determines what happens.
 
 These are the questions to ask when reviewing a change:
 
