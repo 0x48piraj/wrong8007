@@ -1,0 +1,155 @@
+mainmenu "Wrong Boot configuration"
+
+menuconfig WRONG8007
+    bool "Wrong Boot"
+    default y
+    help
+      Enable the Wrong Boot kernel module.
+
+      All options below are compile-time policies baked into the module.
+      Changing the policy requires rebuilding and reinstalling the module.
+
+if WRONG8007
+
+config WRONG8007_KEYBOARD
+    bool "Keyboard trigger"
+    default y
+    help
+      Enable the keyboard phrase trigger.
+
+      The trigger observes resolved printable keyboard input and
+      activates when the configured phrase is entered exactly.
+
+if WRONG8007_KEYBOARD
+
+config WRONG8007_PHRASE
+    string "Trigger phrase"
+    default ""
+    help
+      Exact case-sensitive phrase to match.
+
+      Spaces and punctuation are significant.
+
+      The phrase is compiled and cannot be changed at runtime.
+
+endif
+
+config WRONG8007_USB
+    bool "USB trigger"
+    default y
+    help
+      Enable USB insertion/removal triggers.
+
+if WRONG8007_USB
+
+config WRONG8007_USB_DEVICES
+    string "USB device rules"
+    default ""
+    help
+      Comma-separated USB rules in the form:
+
+        VID:PID[:EVENT]
+
+      EVENT may be insert, eject, or any.
+
+      Examples:
+
+        1234:5678
+        1234:5678:eject,abcd:ef00:any
+
+config WRONG8007_WHITELIST
+    bool "Whitelist mode"
+    default n
+    help
+      When disabled, listed USB devices trigger Wrong Boot.
+
+      When enabled, listed devices are ignored and any
+      non-matching USB insertion/removal triggers Wrong Boot.
+
+endif
+
+config WRONG8007_NETWORK
+    bool "Network trigger"
+    default y
+    help
+      Enable IPv4/network-based triggers.
+
+if WRONG8007_NETWORK
+
+config WRONG8007_MATCH_MAC
+    string "Match MAC address"
+    default ""
+    help
+      Trigger when a packet is observed from this MAC address.
+
+config WRONG8007_MATCH_IP
+    string "Match IPv4 address"
+    default ""
+    help
+      Trigger when an IPv4 packet is observed from this address.
+
+config WRONG8007_MATCH_PORT
+    int "Match TCP/UDP port"
+    range 0 65535
+    default 0
+    help
+      Match either source or destination TCP/UDP port.
+
+      Zero disables port matching.
+
+config WRONG8007_MATCH_PAYLOAD
+    string "Match payload"
+    default ""
+    help
+      Trigger when the configured payload is found in a TCP or UDP
+      packet payload.
+
+config WRONG8007_HEARTBEAT_HOST
+    string "Heartbeat host"
+    default ""
+    help
+      IPv4 address whose packets reset the heartbeat timer.
+
+config WRONG8007_HEARTBEAT_INTERVAL
+    int "Heartbeat interval"
+    range 1 2147483647
+    default 10
+    help
+      Interval in seconds between heartbeat checks.
+
+config WRONG8007_HEARTBEAT_TIMEOUT
+    int "Heartbeat timeout"
+    range 2 2147483647
+    default 30
+    help
+      Timeout in seconds before heartbeat failure activates Wrong Boot.
+
+endif
+
+menu "Execution"
+
+config WRONG8007_EXEC
+    string "Executable or script"
+    default ""
+    help
+      Absolute path to the executable or script that Wrong Boot
+      executes after activation.
+
+      The module refuses to load when this value is empty or
+      exceeds the configured maximum length.
+
+      This path is compiled and cannot be changed at runtime.
+
+endmenu
+
+menu "Diagnostics"
+
+config WRONG8007_DEBUG
+    bool "Verbose debug logging"
+    default n
+    help
+      Enable verbose Wrong Boot diagnostic logging.
+
+endmenu
+
+endif
