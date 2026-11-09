@@ -20,11 +20,18 @@
 #include <linux/slab.h>
 #include <linux/kmod.h>
 #include <linux/atomic.h>
+#include <linux/workqueue.h>
+#include <linux/jiffies.h>
 
 #include <wrong8007.h>
 
 #define REGISTER_TRIGGER(t) &t
 #define EXEC_MAX_LEN 4096
+
+/* Retry failed starts with capped exponential backoff */
+#define MAX_STRIKES 8
+#define COOLDOWN_MIN (1 * HZ)
+#define COOLDOWN_MAX (30 * HZ)
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("03C0");
@@ -32,17 +39,20 @@ MODULE_DESCRIPTION("wrong8007 is an equivalent of a burner phone");
 
 static char *exec;
 module_param(exec, charp, 0000);
+MODULE_PARM_DESC(exec, "absolute path of the executable run on activation");
 
-// Internal storage of module params
 static char *exec_buf;
 
-// Deferred work to run userspace helper
-static struct work_struct exec_work;
+/* Workqueue for payload startup attempts and retries */
+static struct workqueue_struct *exec_wq;
+static struct delayed_work exec_work;
+static unsigned int strikes;
+static bool scrubbed;
 
-// Execution policy state
-static atomic_t exec_armed = ATOMIC_INIT(1);
+/* One-shot activation latch */
+static atomic_t exec_armed = ATOMIC_INIT(0);
 
-// Exported trigger list
+/* Trigger backends */
 extern struct wrong8007_trigger keyboard_trigger;
 extern struct wrong8007_trigger usb_trigger;
 extern struct wrong8007_trigger network_trigger;
@@ -50,16 +60,13 @@ extern struct wrong8007_trigger network_trigger;
 /*
  * Trigger interface contract:
  *
- * - Triggers are owned and managed by the core module.
- * - init() is called once at module load, in array order, and returns 0
- *   on success or a negative errno on failure.
- * - On partial init failure, exit() is called in reverse order for
- *   triggers whose init() succeeded.
+ * - The core initializes triggers in array order.
+ * - init() returns 0 on success or a negative errno on failure.
+ * - On init failure, successfully initialized triggers are released
+ *   in reverse order.
  * - exit() is called once at module unload and must fully undo init().
  * - Triggers must not call wrong8007_activate() from init() or exit().
  * - Trigger callbacks may call wrong8007_activate() after init().
- *
- * This contract enforces fail-closed behavior and one-shot execution.
  */
 static struct wrong8007_trigger *triggers[] = {
     REGISTER_TRIGGER(keyboard_trigger),
@@ -67,7 +74,7 @@ static struct wrong8007_trigger *triggers[] = {
     REGISTER_TRIGGER(network_trigger),
 };
 
-// Minimal environment for shell execution
+/* Environment passed to call_usermodehelper() */
 static char *env[] = {
     "HOME=/",
     "PATH=/sbin:/bin:/usr/sbin:/usr/bin",
@@ -75,23 +82,32 @@ static char *env[] = {
 };
 
 /*
- * Deferred work handler to execute usermode command
+ * Start the configured executable and retry failed starts.
  */
 static void do_exec_work(struct work_struct *w)
 {
+    char *argv[] = { exec_buf, NULL };
+    unsigned long delay;
     int ret;
-    struct subprocess_info *info;
-    const char *argv[4] = { "/bin/sh", "-c", exec_buf, NULL };
 
-    info = call_usermodehelper_setup(argv[0], (char **)argv, env, GFP_KERNEL, NULL, NULL, NULL);
-    if (!info) {
-        wb_err("helper setup failed\n");
+    strikes++;
+    ret = call_usermodehelper(exec_buf, argv, env, UMH_WAIT_EXEC);
+
+    if (ret == 0) {
+        wb_info("payload started\n");
         return;
     }
 
-    /* Wait for completion to ensure one-shot semantics */
-    ret = call_usermodehelper_exec(info, UMH_WAIT_PROC);
-    wb_dbg("exec returned %d\n", ret);
+    if (READ_ONCE(scrubbed) || strikes >= MAX_STRIKES) {
+        wb_err("payload failed to start (err=%d), giving up after %u attempt(s)\n",
+               ret, strikes);
+        return;
+    }
+
+    delay = min_t(unsigned long, COOLDOWN_MIN << (strikes - 1), COOLDOWN_MAX);
+    wb_err("payload failed to start (err=%d), retrying in %lus (attempt %u/%u)\n",
+           ret, delay / HZ, strikes, MAX_STRIKES);
+    queue_delayed_work(exec_wq, &exec_work, delay);
 }
 
 /*
@@ -100,23 +116,40 @@ static void do_exec_work(struct work_struct *w)
  *
  * Only the first caller while execution is armed will schedule
  * the deferred work; all subsequent calls are ignored.
- *
+ * Safe to call from atomic context.
  */
 void wrong8007_activate(void)
 {
-    if (atomic_cmpxchg(&exec_armed, 1, 0) == 1) {
-        schedule_work(&exec_work);
-    }
+    if (atomic_cmpxchg(&exec_armed, 1, 0) == 1)
+        queue_delayed_work(exec_wq, &exec_work, 0);
 }
 
 /*
- * Module init: duplicate input params, register notifier, init work
+ * Stop scheduling attempts and wait for any in-flight startup attempt.
+ */
+static void scrub(void)
+{
+    WRITE_ONCE(scrubbed, true);
+    if (cancel_delayed_work_sync(&exec_work))
+        wb_err("pending payload attempt dropped\n");
+    destroy_workqueue(exec_wq);
+    exec_wq = NULL;
+}
+
+/*
+ * Module init.
  */
 static int __init wrong8007_init(void)
 {
     int i, err;
+
     if (!exec || !*exec) {
         wb_err("exec parameter required\n");
+        return -EINVAL;
+    }
+
+    if (exec[0] != '/') {
+        wb_err("exec must be an absolute path\n");
         return -EINVAL;
     }
 
@@ -126,14 +159,19 @@ static int __init wrong8007_init(void)
     }
 
     exec_buf = kstrdup(exec, GFP_KERNEL);
-    if (!exec_buf) {
+    if (!exec_buf)
         return -ENOMEM;
+
+    exec_wq = alloc_workqueue("wrong8007", WQ_UNBOUND, 1);
+    if (!exec_wq) {
+        err = -ENOMEM;
+        goto fail_wq;
     }
 
-    // Explicitly re-arm execution on module load; redundant with static initialization but intentional
-    atomic_set(&exec_armed, 1);
+    strikes = 0;
+    scrubbed = false;
 
-    INIT_WORK(&exec_work, do_exec_work);
+    INIT_DELAYED_WORK(&exec_work, do_exec_work);
 
     for (i = 0; i < ARRAY_SIZE(triggers); i++) {
         err = triggers[i]->init();
@@ -143,6 +181,9 @@ static int __init wrong8007_init(void)
         }
     }
 
+    /* Arm only once every trigger is up */
+    atomic_set(&exec_armed, 1);
+
     wb_info("loaded\n");
     return 0;
 
@@ -150,21 +191,31 @@ fail:
     while (--i >= 0)
         triggers[i]->exit();
 
+    scrub();
+fail_wq:
     kfree(exec_buf);
+    exec_buf = NULL;
+
     return err;
 }
 
 /*
- * Module exit: cleanup memory, flush workqueue, unregister hook
+ * Module exit.
+ *
+ * Triggers go first and nothing activates afterwards.
  */
 static void __exit wrong8007_exit(void)
 {
     int i;
+
     for (i = 0; i < ARRAY_SIZE(triggers); i++)
         triggers[i]->exit();
 
-    flush_work(&exec_work);
+    scrub();
+
     kfree(exec_buf);
+    exec_buf = NULL;
+
     wb_info("unloaded\n");
 }
 
