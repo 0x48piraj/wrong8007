@@ -138,7 +138,7 @@ static int __init wrong8007_init(void)
     for (i = 0; i < ARRAY_SIZE(triggers); i++) {
         err = triggers[i]->init();
         if (err) {
-            wb_err("wrong8007: failed to init trigger: %s\n", triggers[i]->name);
+            wb_err("failed to init trigger: %s\n", triggers[i]->name);
             goto fail;
         }
     }
