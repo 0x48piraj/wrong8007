@@ -18,7 +18,8 @@
 static struct wb_usb_rule usb_rules[MAX_USB_DEVICES];
 static int usb_rule_count;
 
-static bool usb_whitelist;
+/* Default policy from Kconfig; overridable at load time */
+static bool usb_whitelist = IS_ENABLED(CONFIG_WRONG8007_WHITELIST);
 module_param_named(whitelist, usb_whitelist, bool, 0000);
 MODULE_PARM_DESC(whitelist, "1 fires on unlisted devices and 0 on listed devices");
 
@@ -102,7 +103,7 @@ static bool match_rules(u16 vid, u16 pid, unsigned long action)
     return false;
 }
 
-// USB notifier callback
+/* USB notifier callback */
 static int usb_notifier_callback(struct notifier_block *self, unsigned long action, void *dev)
 {
     struct usb_device *udev;

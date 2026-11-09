@@ -20,6 +20,7 @@
 #include <linux/slab.h>
 #include <linux/kmod.h>
 #include <linux/atomic.h>
+#include <linux/build_bug.h>
 #include <linux/workqueue.h>
 #include <linux/jiffies.h>
 
@@ -53,9 +54,17 @@ static bool scrubbed;
 static atomic_t exec_armed = ATOMIC_INIT(0);
 
 /* Trigger backends */
+#if IS_ENABLED(CONFIG_WRONG8007_KEYBOARD)
 extern struct wrong8007_trigger keyboard_trigger;
+#endif
+
+#if IS_ENABLED(CONFIG_WRONG8007_USB)
 extern struct wrong8007_trigger usb_trigger;
+#endif
+
+#if IS_ENABLED(CONFIG_WRONG8007_NETWORK)
 extern struct wrong8007_trigger network_trigger;
+#endif
 
 /*
  * Trigger interface contract:
@@ -69,9 +78,17 @@ extern struct wrong8007_trigger network_trigger;
  * - Trigger callbacks may call wrong8007_activate() after init().
  */
 static struct wrong8007_trigger *triggers[] = {
+#if IS_ENABLED(CONFIG_WRONG8007_KEYBOARD)
     REGISTER_TRIGGER(keyboard_trigger),
+#endif
+
+#if IS_ENABLED(CONFIG_WRONG8007_USB)
     REGISTER_TRIGGER(usb_trigger),
+#endif
+
+#if IS_ENABLED(CONFIG_WRONG8007_NETWORK)
     REGISTER_TRIGGER(network_trigger),
+#endif
 };
 
 /* Environment passed to call_usermodehelper() */
@@ -142,6 +159,9 @@ static void scrub(void)
 static int __init wrong8007_init(void)
 {
     int i, err;
+
+    /* A build with no triggers is useless duh */
+    BUILD_BUG_ON_MSG(ARRAY_SIZE(triggers) == 0, "wrong8007: enable at least one trigger in Kconfig");
 
     if (!exec || !*exec) {
         wb_err("exec parameter required\n");

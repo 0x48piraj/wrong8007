@@ -1,13 +1,22 @@
 mainmenu "Wrong Boot configuration"
 
+#
+# Kconfig selects the trigger backends compiled into wrong8007.ko and the
+# default policies.
+#
+# Trigger values (phrase, USB rules, network matches and the execution
+# path) are module parameters read at load from a root-only
+# /etc/wrong8007/wrong8007.conf. See configs/wrong8007.conf.example.
+#
+
 menuconfig WRONG8007
     bool "Wrong Boot"
     default y
     help
       Enable the Wrong Boot kernel module.
 
-      All options below are compile-time policies baked into the module.
-      Changing the policy requires rebuilding and reinstalling the module.
+      The options below select the trigger backends compiled into the
+      module. A backend left out cannot be armed at load time.
 
 if WRONG8007
 
@@ -15,132 +24,47 @@ config WRONG8007_KEYBOARD
     bool "Keyboard trigger"
     default y
     help
-      Enable the keyboard phrase trigger.
+      Compile in the keyboard phrase trigger.
 
-      The trigger observes resolved printable keyboard input and
-      activates when the configured phrase is entered exactly.
-
-if WRONG8007_KEYBOARD
-
-config WRONG8007_PHRASE
-    string "Trigger phrase"
-    default ""
-    help
-      Exact case-sensitive phrase to match.
-
-      Spaces and punctuation are significant.
-
-      The phrase is compiled and cannot be changed at runtime.
-
-endif
+      The trigger watches resolved printable keyboard input and activates
+      when the phrase in the "phrase" module parameter is typed exactly.
+      Matching is case-sensitive.
 
 config WRONG8007_USB
     bool "USB trigger"
     default y
     help
-      Enable USB insertion/removal triggers.
+      Compile in the USB insertion and removal trigger.
 
-if WRONG8007_USB
-
-config WRONG8007_USB_DEVICES
-    string "USB device rules"
-    default ""
-    help
-      Comma-separated USB rules in the form:
-
-        VID:PID[:EVENT]
-
-      EVENT may be insert, eject, or any.
-
-      Examples:
-
-        1234:5678
-        1234:5678:eject,abcd:ef00:any
+      Device rules come from the "usb_devices" module parameter as
+      VID:PID[:EVENT] entries separated by commas. EVENT is insert, eject
+      or any.
 
 config WRONG8007_WHITELIST
-    bool "Whitelist mode"
+    bool "Whitelist mode by default"
+    depends on WRONG8007_USB
     default n
     help
-      When disabled, listed USB devices trigger Wrong Boot.
+      Default USB policy when the "whitelist" module parameter is absent.
 
-      When enabled, listed devices are ignored and any
-      non-matching USB insertion/removal triggers Wrong Boot.
+      Disabled (blacklist) means listed USB devices activate Wrong Boot.
 
-endif
+      Enabled (whitelist) means listed devices are ignored and any other
+      USB insertion or removal activates Wrong Boot. List every internal
+      USB device (webcam, Bluetooth and fingerprint reader) in whitelist
+      mode. Ordinary hotplug and resume from suspend activate it
+      otherwise.
 
 config WRONG8007_NETWORK
     bool "Network trigger"
     default y
     help
-      Enable IPv4/network-based triggers.
+      Compile in the IPv4 network trigger. It matches source MAC, source
+      IP, TCP or UDP port and payload string and runs a heartbeat (dead
+      man's switch).
 
-if WRONG8007_NETWORK
-
-config WRONG8007_MATCH_MAC
-    string "Match MAC address"
-    default ""
-    help
-      Trigger when a packet is observed from this MAC address.
-
-config WRONG8007_MATCH_IP
-    string "Match IPv4 address"
-    default ""
-    help
-      Trigger when an IPv4 packet is observed from this address.
-
-config WRONG8007_MATCH_PORT
-    int "Match TCP/UDP port"
-    range 0 65535
-    default 0
-    help
-      Match either source or destination TCP/UDP port.
-
-      Zero disables port matching.
-
-config WRONG8007_MATCH_PAYLOAD
-    string "Match payload"
-    default ""
-    help
-      Trigger when the configured payload is found in a TCP or UDP
-      packet payload.
-
-config WRONG8007_HEARTBEAT_HOST
-    string "Heartbeat host"
-    default ""
-    help
-      IPv4 address whose packets reset the heartbeat timer.
-
-config WRONG8007_HEARTBEAT_INTERVAL
-    int "Heartbeat interval"
-    range 1 2147483647
-    default 10
-    help
-      Interval in seconds between heartbeat checks.
-
-config WRONG8007_HEARTBEAT_TIMEOUT
-    int "Heartbeat timeout"
-    range 2 2147483647
-    default 30
-    help
-      Timeout in seconds before heartbeat failure activates Wrong Boot.
-
-endif
-
-menu "Execution"
-
-config WRONG8007_EXEC
-    string "Executable or script"
-    default ""
-    help
-      Absolute path to the executable or script that Wrong Boot
-      executes after activation.
-
-      The module refuses to load when this value is empty or
-      exceeds the configured maximum length.
-
-      This path is compiled and cannot be changed at runtime.
-
-endmenu
+      The conditions come from the match_* and heartbeat_* module
+      parameters.
 
 menu "Diagnostics"
 
