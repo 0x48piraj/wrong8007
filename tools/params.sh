@@ -30,8 +30,16 @@ usage() {
 }
 
 case "$MODE" in
-    check) [ -n "$CONFIG" ] && [ -n "$PARAMS" ] || usage ;;
-    insmod) [ -n "$CONFIG" ] && [ -n "$PARAMS" ] && [ -n "$MODULE" ] || usage ;;
+    check)
+        if [ -z "$CONFIG" ] || [ -z "$PARAMS" ]; then
+            usage
+        fi
+        ;;
+    insmod)
+        if [ -z "$CONFIG" ] || [ -z "$PARAMS" ] || [ -z "$MODULE" ]; then
+            usage
+        fi
+        ;;
     *) usage ;;
 esac
 

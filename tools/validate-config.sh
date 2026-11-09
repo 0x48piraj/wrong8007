@@ -33,7 +33,11 @@ get_bool() {
 }
 
 onoff() {
-    [ "$1" = y ] && echo on || echo off
+    if [ "$1" = y ]; then
+        echo on
+    else
+        echo off
+    fi
 }
 
 # Master switch; a disabled module has nothing to check
