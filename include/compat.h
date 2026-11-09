@@ -1,6 +1,22 @@
+// SPDX-License-Identifier: GPL-2.0
+/*
+ * wrong8007: kernel compatibility helpers
+ *
+ * Copyright (c) 2023, 03C0 (https://03c0.net/)
+ */
+
+#ifndef WB_COMPAT_H
+#define WB_COMPAT_H
+
 #include <linux/version.h>
+#include <linux/kernel.h>
 #include <linux/timer.h>
 #include <linux/inet.h>
+
+/* Newer kernels declare hex_to_bin() in <linux/hex.h> */
+#if __has_include(<linux/hex.h>)
+#include <linux/hex.h>
+#endif
 
 static inline void wb_timer_delete_sync(struct timer_list *timer)
 {
@@ -26,3 +42,5 @@ static inline bool wb_parse_ipv4(const char *ip, __be32 *out)
     return *out != 0;
 #endif
 }
+
+#endif /* WB_COMPAT_H */

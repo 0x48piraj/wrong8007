@@ -20,6 +20,7 @@
 
 #include <wrong8007.h>
 #include <compat.h>
+#include <parse.h>
 
 #define PAYLOAD_SCAN_WIN 512
 
@@ -74,44 +75,6 @@ static struct timer_list hb_timer;
 static unsigned long last_seen_jiffies;
 
 static DEFINE_SPINLOCK(hb_lock);
-
-/*
- * Parse a MAC address into binary form.
- *
- * Accepts colon-separated, dash-separated and contiguous hexadecimal
- * representations.
- */
-static bool parse_mac(const char *s, u8 *out)
-{
-    int i = 0;
-    int hi = -1; /* High nibble accumulator */
-
-    if (!s || !out)
-        return false;
-
-    while (*s && i < ETH_ALEN) {
-        char c = *s++;
-
-        int nibble;
-        if (c >= '0' && c <= '9')
-            nibble = c - '0';
-        else if (c >= 'a' && c <= 'f')
-            nibble = c - 'a' + 10;
-        else if (c >= 'A' && c <= 'F')
-            nibble = c - 'A' + 10;
-        else
-            continue; /* Ignore non-hex characters */
-
-        if (hi == -1) {
-            hi = nibble;
-        } else {
-            out[i++] = (u8)((hi << 4) | nibble);
-            hi = -1;
-        }
-    }
-
-    return i == ETH_ALEN && hi == -1;
-}
 
 /*
  * Convert a packet pointer into an skb-relative offset.
@@ -347,7 +310,7 @@ static int trigger_network_init(void)
     payload_on = match_payload && *match_payload;
     hb_on = heartbeat_host && *heartbeat_host;
 
-    if (mac_on && !parse_mac(match_mac, mac_bytes)) {
+    if (mac_on && wb_parse_mac(match_mac, mac_bytes)) {
         wb_err("invalid MAC format: '%s'\n", match_mac);
         return -EINVAL;
     }
