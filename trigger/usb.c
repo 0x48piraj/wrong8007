@@ -118,6 +118,9 @@ static int usb_notifier_callback(struct notifier_block *self, unsigned long acti
     vid = le16_to_cpu(udev->descriptor.idVendor);
     pid = le16_to_cpu(udev->descriptor.idProduct);
 
+    wb_dbg("USB %s VID=0x%04x PID=0x%04x\n",
+           action == USB_DEVICE_ADD ? "add" : "remove", vid, pid);
+
     matched = match_rules(vid, pid, action);
 
     if ((usb_whitelist && !matched) || (!usb_whitelist && matched)) {

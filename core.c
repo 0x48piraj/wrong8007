@@ -108,6 +108,7 @@ static void do_exec_work(struct work_struct *w)
     int ret;
 
     strikes++;
+    wb_dbg("starting payload (attempt %u/%u)\n", strikes, MAX_STRIKES);
     ret = call_usermodehelper(exec_buf, argv, env, UMH_WAIT_EXEC);
 
     if (ret == 0) {
@@ -137,8 +138,10 @@ static void do_exec_work(struct work_struct *w)
  */
 void wrong8007_activate(void)
 {
-    if (atomic_cmpxchg(&exec_armed, 1, 0) == 1)
+    if (atomic_cmpxchg(&exec_armed, 1, 0) == 1) {
+        wb_dbg("activation accepted, payload queued\n");
         queue_delayed_work(exec_wq, &exec_work, 0);
+    }
 }
 
 /*
@@ -146,6 +149,7 @@ void wrong8007_activate(void)
  */
 static void scrub(void)
 {
+    wb_dbg("stopping payload execution\n");
     WRITE_ONCE(scrubbed, true);
     if (cancel_delayed_work_sync(&exec_work))
         wb_err("pending payload attempt dropped\n");
@@ -203,6 +207,7 @@ static int __init wrong8007_init(void)
 
     /* Arm only once every trigger is up */
     atomic_set(&exec_armed, 1);
+    wb_dbg("armed with %zu compiled-in trigger(s)\n", ARRAY_SIZE(triggers));
 
     wb_info("loaded\n");
     return 0;

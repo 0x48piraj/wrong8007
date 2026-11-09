@@ -103,6 +103,8 @@ static void hb_timer_fn(struct timer_list *t)
         wb_info("heartbeat timeout reached, scheduling exec\n");
         wrong8007_activate();
     } else {
+        wb_dbg("heartbeat last seen %lus ago (timeout %us)\n",
+               (now - last) / HZ, heartbeat_timeout);
         mod_timer(&hb_timer, jiffies + (unsigned long)heartbeat_interval * HZ);
     }
 }
@@ -360,6 +362,9 @@ static int trigger_network_init(void)
         timer_setup(&hb_timer, hb_timer_fn, 0);
         mod_timer(&hb_timer, jiffies + (unsigned long)heartbeat_interval * HZ);
     }
+
+    wb_dbg("network conditions: mac=%d ip=%d port=%d payload=%d heartbeat=%d\n",
+           mac_on, ip_on, match_port != 0, payload_on, hb_on);
 
     /* Activate packet inspection */
     nfho.hook = nf_hook_fn;
