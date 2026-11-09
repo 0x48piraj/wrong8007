@@ -8,21 +8,18 @@
 #include <linux/keyboard.h>
 #include <linux/notifier.h>
 #include <linux/string.h>
-#include <linux/slab.h>
 #include <linux/spinlock.h>
 
 #include <wrong8007.h>
+#include <phrase_match.h>
 
 static char *phrase;
-
 module_param(phrase, charp, 0000);
-MODULE_PARM_DESC(phrase, "keyboard input to trigger on (e.g., 'nuke')");
+MODULE_PARM_DESC(phrase, "case-sensitive phrase that activates the keyboard trigger");
 
-// Internal storage of module params
-static char *phrase_buf;
-
-// Internal storage of match progress
-static unsigned int matches;
+/* Keyboard trigger state */
+static struct wb_phrase_matcher matcher;
+static bool kbd_registered;
 static DEFINE_SPINLOCK(match_lock);
 
 /*
@@ -100,11 +97,10 @@ static int kbd_cb(struct notifier_block *nb, unsigned long action, void *data)
     int i;
     unsigned long flags;
 
-    // Match only initial key presses
     if (p->down != 1)
         return NOTIFY_OK;
 
-    // Ignore raw keycodes; match only resolved characters
+    /* Ignore raw keycodes; match only resolved characters */
     if (action == KBD_KEYSYM)
         clen = decode_keysym(p->value, bytes);
     else if (action == KBD_UNICODE)
@@ -115,25 +111,13 @@ static int kbd_cb(struct notifier_block *nb, unsigned long action, void *data)
     if (clen <= 0)
         return NOTIFY_OK;
 
-    wb_dbg("kbd: keysym=0x%x, %d UTF-8 byte(s)\n", p->value, clen);
-
-    // Avoid NULL deref of phrase_buf on teardown edge cases
-    if (unlikely(!phrase_buf))
-        return NOTIFY_OK;
-
     spin_lock_irqsave(&match_lock, flags);
 
     for (i = 0; i < clen; i++) {
-        if (bytes[i] == phrase_buf[matches]) {
-            matches++;
-            if (phrase_buf[matches] == '\0') {
-                wb_info("phrase matched, scheduling exec\n");
-                wrong8007_activate();
-                matches = 0;
-                break;
-            }
-        } else {
-            matches = (bytes[i] == phrase_buf[0]) ? 1 : 0;
+        if (wb_phrase_matcher_feed(&matcher, bytes[i])) {
+            wb_info("keyboard trigger matched, scheduling exec\n");
+            wrong8007_activate();
+            break;
         }
     }
 
@@ -155,36 +139,35 @@ static int trigger_keyboard_init(void)
         return 0; // success, no hook
     }
 
-    phrase_buf = kstrdup(phrase, GFP_KERNEL);
-    if (!phrase_buf)
-        return -ENOMEM;
-
-    matches = 0; // reset match progress
+    ret = wb_phrase_matcher_init(&matcher, phrase);
+    if (ret) {
+        wb_err("phrase too long (max %d bytes)\n", WB_PHRASE_MAX_LEN);
+        return ret;
+    }
 
     ret = register_keyboard_notifier(&nb);
     if (ret) {
         wb_err("failed to register keyboard notifier (err=%d)\n", ret);
-        kfree(phrase_buf);
-        phrase_buf = NULL;
         return ret;
     }
 
-    wb_info("keyboard trigger initialized (PHRASE=%s)\n", phrase);
+    kbd_registered = true;
+
+    wb_info("keyboard trigger initialized\n");
     return 0;
 }
 
 static void trigger_keyboard_exit(void)
 {
-    if (!phrase || !*phrase)
-        return; // never registered
+    if (!kbd_registered)
+        return;
 
     unregister_keyboard_notifier(&nb);
-    kfree(phrase_buf);
-    phrase_buf = NULL;
+    kbd_registered = false;
+    wb_phrase_matcher_reset(&matcher);
     wb_info("keyboard trigger exited\n");
 }
 
-// Expose as a trigger plugin
 struct wrong8007_trigger keyboard_trigger = {
     .name = "keyboard",
     .init = trigger_keyboard_init,

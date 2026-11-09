@@ -117,4 +117,4 @@ Here are some great options - all open-source, well-documented, and actively use
 
 You're not limited to just one.
 
-For example, your network trigger could run `scrub` for a quick device wipe, while your USB trigger calls `nwipe` for a thorough multi-pass destruction.
+Every trigger runs the same payload. Combine tools inside it. For example the payload could run `scrub` for a quick device wipe and then `nwipe` for a thorough multi-pass destruction when there is time.

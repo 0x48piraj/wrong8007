@@ -1,0 +1,9 @@
+# Default Wrong Boot build profile with every trigger backend compiled in.
+#
+# Trigger values are module parameters. See configs/wrong8007.conf.example.
+CONFIG_WRONG8007=y
+CONFIG_WRONG8007_KEYBOARD=y
+CONFIG_WRONG8007_USB=y
+# CONFIG_WRONG8007_WHITELIST is not set
+CONFIG_WRONG8007_NETWORK=y
+# CONFIG_WRONG8007_DEBUG is not set

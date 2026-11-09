@@ -20,17 +20,43 @@
 
 #include <wrong8007.h>
 #include <compat.h>
+#include <parse.h>
 
 #define PAYLOAD_SCAN_WIN 512
 
 static char *match_mac;
+module_param(match_mac, charp, 0000);
+MODULE_PARM_DESC(match_mac, "activate on packets from this source MAC address");
+
 static char *match_ip;
+module_param(match_ip, charp, 0000);
+MODULE_PARM_DESC(match_ip, "activate on packets from this source IPv4 address");
+
 static int match_port;
+module_param(match_port, int, 0000);
+MODULE_PARM_DESC(match_port, "TCP or UDP source or destination port to match (0 matches any)");
+
 static char *match_payload;
+module_param(match_payload, charp, 0000);
+MODULE_PARM_DESC(match_payload, "activate on TCP or UDP packets containing this string");
 
 static char *heartbeat_host;
+module_param(heartbeat_host, charp, 0000);
+MODULE_PARM_DESC(heartbeat_host, "IPv4 address whose packets keep the heartbeat alive");
+
 static unsigned int heartbeat_interval = 10;
+module_param(heartbeat_interval, uint, 0000);
+MODULE_PARM_DESC(heartbeat_interval, "seconds between heartbeat checks (default 10)");
+
 static unsigned int heartbeat_timeout = 30;
+module_param(heartbeat_timeout, uint, 0000);
+MODULE_PARM_DESC(heartbeat_timeout, "seconds without a heartbeat before activation (default 30)");
+
+/* Enabled trigger conditions */
+static bool mac_on;
+static bool ip_on;
+static bool payload_on;
+static bool hb_on;
 
 /* Parsed trigger configuration */
 static u8 mac_bytes[ETH_ALEN];
@@ -49,44 +75,6 @@ static struct timer_list hb_timer;
 static unsigned long last_seen_jiffies;
 
 static DEFINE_SPINLOCK(hb_lock);
-
-/*
- * Parse a MAC address into binary form.
- *
- * Accepts colon-separated, dash-separated and contiguous hexadecimal
- * representations.
- */
-static bool parse_mac(const char *s, u8 *out)
-{
-    int i = 0;
-    int hi = -1; /* High nibble accumulator */
-
-    if (!s || !out)
-        return false;
-
-    while (*s && i < ETH_ALEN) {
-        char c = *s++;
-
-        int nibble;
-        if (c >= '0' && c <= '9')
-            nibble = c - '0';
-        else if (c >= 'a' && c <= 'f')
-            nibble = c - 'a' + 10;
-        else if (c >= 'A' && c <= 'F')
-            nibble = c - 'A' + 10;
-        else
-            continue; /* Ignore non-hex characters */
-
-        if (hi == -1) {
-            hi = nibble;
-        } else {
-            out[i++] = (u8)((hi << 4) | nibble);
-            hi = -1;
-        }
-    }
-
-    return i == ETH_ALEN && hi == -1;
-}
 
 /*
  * Convert a packet pointer into an skb-relative offset.
@@ -115,6 +103,8 @@ static void hb_timer_fn(struct timer_list *t)
         wb_info("heartbeat timeout reached, scheduling exec\n");
         wrong8007_activate();
     } else {
+        wb_dbg("heartbeat last seen %lus ago (timeout %us)\n",
+               (now - last) / HZ, heartbeat_timeout);
         mod_timer(&hb_timer, jiffies + (unsigned long)heartbeat_interval * HZ);
     }
 }
@@ -214,14 +204,14 @@ static unsigned int nf_hook_fn(void *priv,
     iph = ip_hdr(skb);
 
     /* Refresh heartbeat liveness before evaluating trigger conditions */
-    if (heartbeat_host && iph->saddr == heartbeat_ip_addr) {
+    if (hb_on && iph->saddr == heartbeat_ip_addr) {
         unsigned long flags;
         spin_lock_irqsave(&hb_lock, flags);
         last_seen_jiffies = jiffies;
         spin_unlock_irqrestore(&hb_lock, flags);
     }
 
-    if (match_mac) {
+    if (mac_on) {
         if (!skb_mac_header_was_set(skb) || skb->mac_len < ETH_HLEN)
             goto out;
 
@@ -234,10 +224,10 @@ static unsigned int nf_hook_fn(void *priv,
             goto out;
     }
 
-    if (match_ip && iph->saddr != match_ip_addr)
+    if (ip_on && iph->saddr != match_ip_addr)
         goto out;
 
-    if (match_port || match_payload) {
+    if (match_port || payload_on) {
 
         if (iph->protocol == IPPROTO_TCP) {
             if (!pskb_may_pull(skb, iph_len + sizeof(struct tcphdr)))
@@ -295,13 +285,14 @@ static unsigned int nf_hook_fn(void *priv,
             goto out;
         }
 
-        if (match_payload &&
-            payload_contains(skb, offset, payload_size, match_payload, payload_len)) {
-            wb_info("magic payload matched, scheduling exec\n");
-            wrong8007_activate();
-        }
+        if (payload_on &&
+            !payload_contains(skb, offset, payload_size, match_payload, payload_len))
+            goto out;
 
-    } else if (match_mac || match_ip) {
+        wb_info("network trigger matched, scheduling exec\n");
+        wrong8007_activate();
+
+    } else if (mac_on || ip_on) {
         /* Trigger on L2/L3 match alone */
         wb_info("MAC/IP trigger matched, scheduling exec\n");
         wrong8007_activate();
@@ -314,39 +305,41 @@ out:
 static int trigger_network_init(void)
 {
     int ret;
+    unsigned long flags;
 
-    if (match_mac) {
-        if (!parse_mac(match_mac, mac_bytes)) {
-            wb_err("invalid MAC format: '%s'\n", match_mac);
-            return -EINVAL;
-        }
+    mac_on = match_mac && *match_mac;
+    ip_on = match_ip && *match_ip;
+    payload_on = match_payload && *match_payload;
+    hb_on = heartbeat_host && *heartbeat_host;
+
+    if (mac_on && wb_parse_mac(match_mac, mac_bytes)) {
+        wb_err("invalid MAC format: '%s'\n", match_mac);
+        return -EINVAL;
     }
-    if (match_ip) {
-        if (!wb_parse_ipv4(match_ip, &match_ip_addr)) {
-            wb_err("invalid IP format\n");
-            return -EINVAL;
-        }
+    if (ip_on && !wb_parse_ipv4(match_ip, &match_ip_addr)) {
+        wb_err("invalid IP format\n");
+        return -EINVAL;
     }
-    if (match_payload) {
+    if (match_port < 0 || match_port > 65535) {
+        wb_err("invalid port (expected 0-65535)\n");
+        return -EINVAL;
+    }
+    if (payload_on) {
         payload_len = strlen(match_payload);
-        if (payload_len == 0) {
-            wb_warn("empty payload string, ignoring payload match\n");
-            match_payload = NULL;
-            payload_len = 0;
-        } else if (payload_len > PAYLOAD_SCAN_WIN) {
+        if (payload_len > PAYLOAD_SCAN_WIN) {
             wb_err("payload string too long (max %d bytes)\n",
                 PAYLOAD_SCAN_WIN);
             return -EINVAL;
         }
     }
 
-    if (!match_mac && !match_ip && !match_port && !match_payload && !heartbeat_host) {
+    if (!mac_on && !ip_on && !match_port && !payload_on && !hb_on) {
         wb_warn("network trigger disabled (no network parameters)\n");
         return 0; // success, no hook
     }
 
     /* Initialize heartbeat monitoring */
-    if (heartbeat_host) {
+    if (hb_on) {
         if (!wb_parse_ipv4(heartbeat_host, &heartbeat_ip_addr)) {
             wb_err("invalid heartbeat host IP\n");
             return -EINVAL;
@@ -363,13 +356,15 @@ static int trigger_network_init(void)
             wb_err("heartbeat interval/timeout too large\n");
             return -EINVAL;
         }
-        unsigned long flags;
         spin_lock_irqsave(&hb_lock, flags);
         last_seen_jiffies = jiffies;
         spin_unlock_irqrestore(&hb_lock, flags);
         timer_setup(&hb_timer, hb_timer_fn, 0);
         mod_timer(&hb_timer, jiffies + (unsigned long)heartbeat_interval * HZ);
     }
+
+    wb_dbg("network conditions: mac=%d ip=%d port=%d payload=%d heartbeat=%d\n",
+           mac_on, ip_on, match_port != 0, payload_on, hb_on);
 
     /* Activate packet inspection */
     nfho.hook = nf_hook_fn;
@@ -380,7 +375,7 @@ static int trigger_network_init(void)
     ret = nf_register_net_hook(&init_net, &nfho);
     if (ret) {
         wb_err("failed to register net hook: %d\n", ret);
-        if (heartbeat_host)
+        if (hb_on)
             wb_timer_delete_sync(&hb_timer);
         return ret;
     }
@@ -396,7 +391,7 @@ static void trigger_network_exit(void)
         nf_unregister_net_hook(&init_net, &nfho);
         hook_registered = false;
     }
-    if (heartbeat_host)
+    if (hb_on)
         wb_timer_delete_sync(&hb_timer);
     wb_info("network trigger exited\n");
 }
@@ -406,24 +401,3 @@ struct wrong8007_trigger network_trigger = {
     .init = trigger_network_init,
     .exit = trigger_network_exit
 };
-
-MODULE_PARM_DESC(match_mac, "MAC address to match");
-module_param(match_mac, charp, 0000);
-
-MODULE_PARM_DESC(match_ip, "IPv4 address to match");
-module_param(match_ip, charp, 0000);
-
-MODULE_PARM_DESC(match_port, "TCP/UDP port to match");
-module_param(match_port, int, 0000);
-
-MODULE_PARM_DESC(match_payload, "magic payload string");
-module_param(match_payload, charp, 0000);
-
-MODULE_PARM_DESC(heartbeat_host, "IPv4 address for heartbeat monitoring");
-module_param(heartbeat_host, charp, 0000);
-
-MODULE_PARM_DESC(heartbeat_interval, "heartbeat check interval (seconds)");
-module_param(heartbeat_interval, uint, 0000);
-
-MODULE_PARM_DESC(heartbeat_timeout, "heartbeat timeout before trigger (seconds)");
-module_param(heartbeat_timeout, uint, 0000);

@@ -9,8 +9,8 @@
  * No dependency beyond libc.
  */
 
-/* Request POSIX.1-2008 interfaces */
-#define _POSIX_C_SOURCE 200809L
+/* Request POSIX.1-2008 with the X/Open extensions */
+#define _XOPEN_SOURCE 700
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdarg.h>

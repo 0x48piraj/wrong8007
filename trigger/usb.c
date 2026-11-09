@@ -7,114 +7,103 @@
 
 #include <linux/usb.h>
 #include <linux/string.h>
+#include <linux/slab.h>
 
 #include <wrong8007.h>
+#include <parse.h>
 
 #define MAX_USB_DEVICES 16
+#define USB_RULE_MAX_LEN 64
 
-// Device rule structure
-struct usb_dev_rule {
-    u16 vid;
-    u16 pid;
-    enum { USB_EVT_INSERT, USB_EVT_EJECT, USB_EVT_ANY } event;
-};
-
-// Table of valid USB events and their enum values
-static const struct {
-    const char *name;
-    int value;
-} evt_map[] = {
-    { "insert", USB_EVT_INSERT },
-    { "eject",  USB_EVT_EJECT  },
-    { "any",    USB_EVT_ANY    },
-};
-
-// Storage for parsed rules
-static struct usb_dev_rule usb_rules[MAX_USB_DEVICES];
+static struct wb_usb_rule usb_rules[MAX_USB_DEVICES];
 static int usb_rule_count;
 
-// Whitelist/blacklist mode (default = blacklist)
-static bool usb_whitelist = false;
+/* Default policy from Kconfig; overridable at load time */
+static bool usb_whitelist = IS_ENABLED(CONFIG_WRONG8007_WHITELIST);
 module_param_named(whitelist, usb_whitelist, bool, 0000);
-MODULE_PARM_DESC(whitelist, "true=match all except listed, false=only match listed devices");
+MODULE_PARM_DESC(whitelist, "1 fires on unlisted devices and 0 on listed devices");
 
-// Device rules as strings: "VID:PID:EVENT"
-static char *usb_devices[MAX_USB_DEVICES];
-static int usb_devices_count;
-module_param_array(usb_devices, charp, &usb_devices_count, 0000);
-MODULE_PARM_DESC(usb_devices, "VID:PID:EVENT (EVENT=insert|eject|any)");
+static char *usb_devices;
+module_param(usb_devices, charp, 0000);
+MODULE_PARM_DESC(usb_devices, "comma-separated USB rules VID:PID[:insert|eject|any]");
 
-// Parse module param usb_devices[] into structured rules
 static int parse_usb_devices(void)
 {
-    int i, j;
+    char *config;
+    char *cursor;
+    char *token;
+    int ret = 0;
 
-    for (i = 0; i < usb_devices_count; i++) {
-        unsigned int vid, pid;
-        char buf[64];         // local bounded copy of param string
-        char evt_str[16] = "any"; // default: "any", can be "eject" or "insert"
-        int n;
+    usb_rule_count = 0;
 
-        // Skip NULL or empty entries (unlikely but possible)
-        if (!usb_devices[i] || !*usb_devices[i]) {
-            wb_warn("skipping empty USB rule at index %d\n", i);
+    if (!usb_devices || !*usb_devices)
+        return 0;
+
+    config = kstrdup(usb_devices, GFP_KERNEL);
+    if (!config)
+        return -ENOMEM;
+
+    cursor = config;
+
+    while ((token = strsep(&cursor, ",")) != NULL) {
+        char *rule = strim(token);
+
+        if (!*rule)
             continue;
+
+        if (usb_rule_count >= MAX_USB_DEVICES) {
+            wb_err("too many USB rules (max %d)\n",
+                   MAX_USB_DEVICES);
+            ret = -E2BIG;
+            goto out;
         }
 
-        // Ensure bounded copy of the module param string
-        strscpy(buf, usb_devices[i], sizeof(buf));
-
-        n = sscanf(buf, "%x:%x:%15s", &vid, &pid, evt_str);
-        if (n < 2) {
-            wb_err("invalid USB rule '%s'\n", buf);
-            return -EINVAL;
+        if (strlen(rule) >= USB_RULE_MAX_LEN) {
+            wb_err("USB rule too long: '%s'\n", rule);
+            ret = -EINVAL;
+            goto out;
         }
 
-        if (vid > 0xffff || pid > 0xffff) {
-            wb_err("VID/PID out of range (max 0xffff) in rule '%s'\n", buf);
-            return -EINVAL;
+        ret = wb_parse_usb_rule(rule, &usb_rules[usb_rule_count]);
+        if (ret) {
+            wb_err("invalid USB rule '%s' (expected VID:PID[:insert|eject|any])\n",
+                   rule);
+            goto out;
         }
 
-        usb_rules[usb_rule_count].vid = (u16)vid;
-        usb_rules[usb_rule_count].pid = (u16)pid;
-
-        // Map event string to enum
-        for (j = 0; j < ARRAY_SIZE(evt_map); j++) {
-            if (!strcmp(evt_str, evt_map[j].name)) {
-                usb_rules[usb_rule_count].event = evt_map[j].value;
-                goto valid_event;
-            }
-        }
-
-        wb_err("unknown event '%s' in rule '%s'\n", evt_str, buf);
-        return -EINVAL;
-
-valid_event:
-        wb_dbg("rule[%d] VID=0x%04x PID=0x%04x EVENT=%s\n",
-                usb_rule_count, vid, pid, evt_str);
         usb_rule_count++;
     }
 
-    return 0;
+out:
+    kfree(config);
+    return ret;
 }
 
-// Match a device/action against rules
 static bool match_rules(u16 vid, u16 pid, unsigned long action)
 {
     int i;
+
     for (i = 0; i < usb_rule_count; i++) {
-        if (vid == usb_rules[i].vid && pid == usb_rules[i].pid) {
-            if ((action == USB_DEVICE_ADD &&
-                 (usb_rules[i].event == USB_EVT_INSERT || usb_rules[i].event == USB_EVT_ANY)) ||
-                (action == USB_DEVICE_REMOVE &&
-                 (usb_rules[i].event == USB_EVT_EJECT || usb_rules[i].event == USB_EVT_ANY)))
-                return true;
-        }
+        const struct wb_usb_rule *rule = &usb_rules[i];
+
+        if (vid != rule->vid || pid != rule->pid)
+            continue;
+
+        if (action == USB_DEVICE_ADD &&
+            (rule->event == WB_USB_INSERT ||
+             rule->event == WB_USB_ANY))
+            return true;
+
+        if (action == USB_DEVICE_REMOVE &&
+            (rule->event == WB_USB_EJECT ||
+             rule->event == WB_USB_ANY))
+            return true;
     }
+
     return false;
 }
 
-// USB notifier callback
+/* USB notifier callback */
 static int usb_notifier_callback(struct notifier_block *self, unsigned long action, void *dev)
 {
     struct usb_device *udev;
@@ -122,16 +111,15 @@ static int usb_notifier_callback(struct notifier_block *self, unsigned long acti
 
     bool matched;
 
-    /*
-    * Only device notifications carry struct usb_device *.
-    * Bus notifications use a different payload type.
-    */
     if (action != USB_DEVICE_ADD && action != USB_DEVICE_REMOVE)
         return NOTIFY_OK;
 
     udev = dev;
     vid = le16_to_cpu(udev->descriptor.idVendor);
     pid = le16_to_cpu(udev->descriptor.idProduct);
+
+    wb_dbg("USB %s VID=0x%04x PID=0x%04x\n",
+           action == USB_DEVICE_ADD ? "add" : "remove", vid, pid);
 
     matched = match_rules(vid, pid, action);
 
@@ -143,7 +131,6 @@ static int usb_notifier_callback(struct notifier_block *self, unsigned long acti
     return NOTIFY_OK;
 }
 
-// Declare notifier_block
 static struct notifier_block usb_nb = {
     .notifier_call = usb_notifier_callback,
 };
@@ -160,8 +147,10 @@ static int trigger_usb_init(void)
     }
 
     usb_register_notify(&usb_nb); // no return value on modern kernels
+
     wb_info("USB trigger initialized in %s mode (%d rules)\n",
             usb_whitelist ? "whitelist" : "blacklist", usb_rule_count);
+
     return 0;
 }
 
@@ -169,10 +158,12 @@ static void trigger_usb_exit(void)
 {
     if (usb_rule_count > 0)
         usb_unregister_notify(&usb_nb);
+
+    usb_rule_count = 0;
+
     wb_info("USB trigger exited\n");
 }
 
-// Expose as trigger plugin
 struct wrong8007_trigger usb_trigger = {
     .name = "usb",
     .init = trigger_usb_init,

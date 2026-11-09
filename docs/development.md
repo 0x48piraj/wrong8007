@@ -55,7 +55,7 @@ The core module (`wrong8007.c`) is responsible for:
 * Initializing and tearing down registered triggers
 * Maintaining the global execution state
 * Arbitrating competing trigger activations
-* Scheduling deferred execution through `exec_work`
+* Queueing deferred execution on its own workqueue
 * Invoking the configured userspace command through the [User Mode Helper API](https://www.kernel.org/doc/html/v4.13/core-api/kernel-api.html#c.call_usermodehelper_exec)
 * Rolling back trigger initialization if module loading fails
 * Flushing pending execution work during module unload
@@ -75,7 +75,7 @@ A trigger **must not own execution policy**.
 
 In particular, triggers must not:
 
-* Call `schedule_work(&exec_work)`
+* Queue the core's execution work
 * Call `call_usermodehelper()` directly
 * Execute the configured payload themselves
 * Modify the global execution latch
@@ -135,7 +135,7 @@ The core owns the activation decision and uses an atomic execution latch:
 void wrong8007_activate(void)
 {
     if (atomic_cmpxchg(&exec_armed, 1, 0) == 1)
-        schedule_work(&exec_work);
+        queue_delayed_work(exec_wq, &exec_work, 0);
 }
 ```
 
@@ -143,7 +143,7 @@ This provides the module's one-shot guarantee.
 
 ### First trigger wins
 
-The module starts armed:
+The module arms the latch once every trigger is up:
 
 ```text
 exec_armed = 1
@@ -161,7 +161,7 @@ flowchart LR
 
     A["Activation request"]
     G{"Atomic latch<br/>compare-and-exchange"}
-    W["exec_armed = 0<br/>schedule exec_work"]
+    W["exec_armed = 0<br/>queue exec_work"]
     D["exec_armed = 0<br/>activation rejected"]
 
     K --> A
@@ -217,27 +217,25 @@ flowchart LR
     class P user
 ```
 
-The work item runs in process context on the kernel's system workqueue, allowing the execution path to perform operations that are not appropriate from trigger callbacks.
+The work item runs in process context on the module's own unbound workqueue. That queue holds the retry timer and goes away with the module.
 
 The configured payload is therefore **never executed directly from a trigger callback**.
 
 ### User-mode execution
 
-The core invokes the configured command through `/bin/sh`:
+The core runs the configured file directly without a shell. Scripts run through their `#!` line.
 
 ```mermaid
 flowchart LR
     W["exec_work"]
-    Q["system_wq"]
+    Q["wrong8007 workqueue"]
     D["do_exec_work()"]
-    S["call_usermodehelper_setup()"]
-    E["call_usermodehelper_exec()<br/>UMH_WAIT_PROC"]
-    P["/bin/sh -c &lt;exec_buf&gt;"]
+    E["call_usermodehelper()<br/>UMH_WAIT_EXEC"]
+    P["&lt;exec&gt;"]
 
     W --> Q
     Q --> D
-    D --> S
-    S --> E
+    D --> E
     E --> P
 
     classDef core fill:#e9eef2,stroke:#657786,color:#202a30
@@ -245,7 +243,7 @@ flowchart LR
     classDef user fill:#e4efec,stroke:#648b83,color:#243a36
 
     class W,Q,D core
-    class S,E helper
+    class E helper
     class P user
 ```
 
@@ -256,10 +254,16 @@ HOME=/
 PATH=/sbin:/bin:/usr/sbin:/usr/bin
 ```
 
-The User Mode Helper invocation uses `UMH_WAIT_PROC`, so the kernel worker executing `exec_work` waits for the userspace command to finish.
+The core waits only until the payload has started (`UMH_WAIT_EXEC`). The payload then runs on by itself and its exit status is never collected.
 
-> [!CAUTION]
-> This has an important operational consequence: a payload that never terminates can keep the execution work item running indefinitely.
+| Outcome | What the core does |
+|---|---|
+| Started | Logs the start and never runs the payload again |
+| Failed to start | Logs the error and retries with backoff for about a minute and a half |
+
+A payload fails to start when the file is missing or not executable, when memory is short or while usermode helpers are disabled around suspend and resume.
+
+A long-running payload holds no kernel worker and module unload never waits for it.
 
 ## Module lifecycle
 
@@ -267,12 +271,13 @@ The User Mode Helper invocation uses `UMH_WAIT_PROC`, so the kernel worker execu
 
 During module initialization, the core:
 
-1. Validates and copies the configured execution command.
-2. Initializes the execution latch to the armed state.
+1. Validates and copies the configured execution path. It must be absolute.
+2. Allocates the execution workqueue.
 3. Initializes each registered trigger in sequence.
 4. Aborts loading if any trigger fails.
+5. Arms the execution latch once every trigger is up.
 
-If a trigger fails to initialize, previously initialized triggers are torn down and allocated state is released before module initialization returns an error.
+If a trigger fails to initialize, previously initialized triggers are torn down and allocated state is released before module initialization returns an error. Nothing activates before every trigger is up.
 
 This provides a fail-closed initialization path: the module does not remain partially active when it cannot initialize all requested components.
 
@@ -294,12 +299,10 @@ During module removal, the core:
 
 1. Calls each trigger's `exit()` function.
 2. Unregisters trigger hooks and stops asynchronous trigger activity.
-3. Flushes `exec_work`.
+3. Cancels pending execution work and destroys its workqueue.
 4. Frees core-owned memory.
 
-`flush_work(&exec_work)` waits for an already-running execution work item to finish.
-
-Consequently, unloading the module while the configured payload is still running can block until that payload exits.
+A payload start already in progress finishes. An attempt still waiting to start (for example a pending retry) is dropped and logged. A payload that has started keeps running after the module is gone.
 
 ## Designing a new trigger
 
@@ -436,9 +439,9 @@ Use the project's logging macros consistently:
 
 Logging is not guaranteed to stop after activation.
 
-The execution path itself records the result of the userspace helper after it returns and debug logging may expose additional trigger or execution information.
+The core logs every payload outcome.
 
-Avoid logging sensitive configuration values unless there is a clear debugging reason to do so.
+Never log trigger values such as the phrase, payload string or matched keystrokes. The kernel log is often readable by any user.
 
 ## Testing new triggers
 
@@ -489,3 +492,106 @@ USB device rules are parsed once during module initialization rather than in the
 This keeps the notifier callback focused solely on event matching and ensures invalid configurations fail before any USB notifier is registered.
 
 If no rules are configured, the USB trigger remains inactive and does not register a notifier.
+
+### Keyboard trigger
+
+The keyboard trigger registers with the kernel keyboard notifier chain.
+
+It processes resolved keyboard events rather than raw keycodes. The relevant notifier events are:
+
+* `KBD_KEYSYM`
+* `KBD_UNICODE`
+
+The trigger converts resolved values into UTF-8 and compares the resulting bytes against the configured phrase.
+
+The phrase matcher maintains state across incoming characters. A complete match calls:
+
+```c
+wrong8007_activate();
+```
+
+Important implementation characteristics:
+
+* Matching is case-sensitive.
+* Matching operates on the resolved character stream rather than physical key positions.
+* The matcher compares bytes. A UTF-8 phrase matches when its bytes arrive in order.
+* The keyboard notifier delivers Latin-1 characters only (code points below 256). Phrases outside Latin-1 cannot be typed.
+* Matching uses the Knuth-Morris-Pratt failure function (`lib/phrase_match.c`). Phrases with a repeated beginning ("aab" typed as "aaab") match.
+* The matcher and the parameter parsers (`lib/parse.c`) hold no module state and can be unit tested on their own.
+* Non-printable keys and modifiers do not behave as ordinary phrase characters.
+* The notifier does not provide the same input stream as raw keyboard modes or virtual/remote input mechanisms.
+
+The matcher is intentionally stateful; its state belongs to the keyboard trigger and does not affect the core's execution policy.
+
+### USB trigger
+
+The USB trigger registers with the USB subsystem notifier.
+
+USB rules are parsed once during initialization by `wb_parse_usb_rule()` in `lib/parse.c`. Parsing is strict. Anything other than exactly `VID:PID[:EVENT]` fails the load.
+
+Rules identify:
+
+```text
+VID:PID[:EVENT]
+```
+
+The callback evaluates USB device add/remove events against the parsed rules.
+
+In blacklist mode:
+
+```text
+whitelist = 0
+```
+
+a matching device event activates the module.
+
+In whitelist mode:
+
+```text
+whitelist = 1
+```
+
+a non-matching device event activates the module.
+
+The distinction is important because the notifier receives USB device add/remove events broadly. Whitelist mode therefore means "activate on anything outside the configured set," not simply "allow these devices."
+
+If no USB rules are configured, the USB trigger remains inactive and does not register its notifier.
+
+### Network trigger
+
+The network trigger registers a Netfilter hook at:
+
+```c
+NF_INET_PRE_ROUTING
+```
+
+It evaluates incoming IPv4 traffic and can inspect multiple layers of the packet:
+
+* source MAC address;
+* source IPv4 address;
+* TCP/UDP ports;
+* packet payload.
+
+Payload matching uses packet-data extraction and a substring search over the configured scan window.
+
+The network trigger therefore operates directly on packets before normal userspace networking components process them.
+
+#### Heartbeat monitoring
+
+When `heartbeat_host` is configured, the network trigger maintains the time at which traffic from that host was last observed.
+
+A kernel timer periodically evaluates the elapsed time.
+
+If the elapsed time exceeds the configured heartbeat timeout, the trigger calls:
+
+```c
+wrong8007_activate();
+```
+
+An important edge case is that the initial heartbeat timestamp is established when the network trigger is initialized. It is not dependent on having received a heartbeat first.
+
+Therefore:
+
+> If no packet from `heartbeat_host` is observed before `heartbeat_timeout` expires after module initialization, the heartbeat trigger can activate even if no heartbeat was ever received.
+
+This behavior should be considered when configuring the module on systems where the heartbeat source may be unavailable during boot or startup.

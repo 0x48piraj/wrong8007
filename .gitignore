@@ -1,3 +1,4 @@
+# Kernel build artifacts
 *.ko
 *.o
 *.o.d
@@ -6,3 +7,9 @@
 *.mod
 *.symvers
 modules.order
+
+# Kconfig artifacts
+.config
+.config.old
+include/config/
+include/generated/

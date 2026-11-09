@@ -35,52 +35,113 @@ Further design rationale is documented in the [design philosophy](docs/manifesto
 
 ## Usage
 
-The usage is pretty simple, actually, but you will need to have **superuser access** to the machine.
+You need **root** on the machine and the headers for your running kernel (`linux-headers` on Arch, `linux-headers-$(uname -r)` on Debian and Ubuntu). Kernels built with BTF (Arch, Fedora and recent Ubuntu) also need `pahole` (`dwarves` on Debian and Ubuntu).
 
-#### 1. Clone the repository
+Configuration has two parts and they stay apart on purpose.
 
-```bash
-    $ git clone https://github.com/0x48piraj/wrong8007.git
-    $ cd wrong8007/
-```
+| Part | What it holds | Where it lives | Secret |
+|---|---|---|---|
+| **Build profile** | Triggers compiled into the module | `.config` (Kconfig) | No |
+| **Load parameters** | Phrase, USB rules, network matches and payload path | `/etc/wrong8007/wrong8007.conf` with mode `0600` | Yes |
 
-#### 2. Build the kernel module
+Nothing secret is compiled into the module or written to the source tree.
 
-Compiling the LKM,
+### 1. Build the module
 
-```bash
-    $ make
-```
-
-Debugging:
-
-- Optional `-DDEBUG` flag prints verbose logs for keypresses and command execution
-
-   Enable with:
+Clone the repository:
 
 ```bash
-    $ make EXTRA_CFLAGS=-DDEBUG
+git clone https://github.com/0x48piraj/wrong8007.git
+cd wrong8007/
 ```
 
-At last, installing the kernel module,
-
-#### 3. Load the module
-
-**Example:** run `tests/test_exec.sh` when the phrase `secret phrase` is typed.
+Build it with every trigger:
 
 ```bash
-    $ chmod +x tests/test_exec.sh
-    $ test -f tests/test_exec.sh && make load PHRASE='secret phrase' EXEC="$(realpath tests/test_exec.sh)"
+make
 ```
 
-> The executable/script **must** have execute permissions (`chmod +x`) and use an absolute path.
+Run `make menuconfig` to compile in only the triggers you use. It needs a writable kernel build tree (usually root). Editing `.config` and running `make` works too. A trigger you leave out adds no code to your kernel.
 
-## Removing the kernel module
+### 2. Write the parameters
+
+Install the parameter template (readable by root only):
 
 ```bash
-    $ make remove   # Remove the module
-    $ make clean    # Optional: clean build artifacts
+make params-init
 ```
+
+Fill it in:
+
+```bash
+sudoedit /etc/wrong8007/wrong8007.conf
+```
+
+Check it against your build:
+
+```bash
+make params-check
+```
+
+`exec` is required. It's the **absolute canonical path** to an executable file. The kernel runs that file directly without a shell. The executable runs with root privileges.
+
+Scripts need _shebang_ and the payload takes no arguments. The other options arm the triggers below. `configs/wrong8007.conf.example` shows every option.
+
+`params-check` refuses anything the kernel would reject or quietly ignore. That covers unknown names, values for triggers that aren't compiled in and a configuration that arms no trigger.
+
+> [!IMPORTANT]
+> Keep the parameters out of `/etc/modprobe.d`. Initramfs tools copy that directory into the boot image. The image is often readable by every user and `/boot` is usually left unencrypted.
+
+### 3. Install and load
+
+Install the module:
+
+```bash
+make install
+```
+
+Load it (this checks the parameters first):
+
+```bash
+make load-installed
+```
+
+It runs `modprobe -C /etc/wrong8007/wrong8007.conf wrong8007`. A plain `modprobe wrong8007` reads no parameters and the module refuses to load.
+
+`make load` loads the module you just built without installing it. It's meant for development. It passes the parameters on the `insmod` command line where other users can briefly see them in the process list.
+
+### Unload and uninstall
+
+Unload the module:
+
+```bash
+make remove
+```
+
+Remove the installed module:
+
+```bash
+make uninstall
+```
+
+### What happens on activation
+
+The first trigger to fire runs the payload **once**. Later activations do nothing until the module is reloaded.
+
+The kernel log shows whether the payload started. A payload that fails to start is retried with backoff for about a minute and a half (for example when the file is missing or the system is resuming from suspend). A payload that started is never run again and keeps running after the module is unloaded. Its exit status isn't collected.
+
+> [!TIP]
+> Wrap the payload while you test it to see its exit status in the journal:
+>
+> ```sh
+> #!/bin/sh
+> /usr/local/sbin/wipe
+> logger -t wrong8007 "payload exited with status $?"
+> ```
+>
+> Point `exec` back at the real payload once it works.
+
+Trigger values such as the phrase and the payload string never appear in the kernel log.
 
 ## Keyboard-based trigger
 
@@ -88,154 +149,99 @@ The `wrong8007` module can trigger actions when a specific **phrase** is typed o
 
 * **Case-sensitive** matching. `"nuke"` is different from `"NUKE"`.
 * Matches **exactly** as typed, without ignoring spaces or punctuation.
-* Works only on **printable characters** (no special keys like Shift or Ctrl).
+* Phrases with a repeated beginning match too (`"aab"` typed as `"aaab"`).
+* Phrases hold up to 128 bytes.
 
-### Usage
-
-Load the module with the desired trigger phrase:
-
-```bash
-make load PHRASE="nuke" EXEC="/path/to/script"
 ```
-
-The configured script will run immediately after the phrase is typed in sequence.
+options wrong8007 exec=/usr/local/sbin/wipe phrase="correct horse battery"
+```
 
 #### Limitations
 
-* Matches the characters the kernel's own keymap resolved to, so it works with **any keymap**, including international/Latin-1 layouts.
-* Printable characters only: each key must resolve to a single Latin-1 character; special keys (Shift, Ctrl, arrows, F-keys) are ignored.
+* Matches the characters the kernel's console keymap resolves keys to.
+* Each key must resolve to a single Latin-1 character. Special keys (Shift, Ctrl, arrows and F-keys) are ignored.
 * Dead-key and Compose compositions are invisible to the keyboard notifier and cannot be matched.
-* Requires the phrase to be typed **without mistakes**. Any wrong key resets the match.
-* Does not capture keys from virtual keyboards, remote sessions, or consoles in `VC_RAW`/`VC_MEDIUMRAW`/`VC_OFF` modes.
+* Requires the phrase to be typed **without mistakes**. A wrong key restarts the match.
+* Does not capture keys from remote sessions or from consoles in `VC_RAW`, `VC_MEDIUMRAW` or `VC_OFF` mode.
 
 ## USB-based triggers
 
-USB triggers can be configured to react to insertion, removal, or both for one or more devices.
+USB triggers react to insertion, removal or both for one or more devices. A device is named by its **Vendor ID (VID)** and **Product ID (PID)**. `lsusb` and `./tools/wrong8007ctl usb-list` show them.
 
-### Usage
+A rule reads `VID:PID[:EVENT]` and a list holds up to 16 rules separated by commas. VID and PID are 1 to 4 hex digits with an optional `0x`. EVENT is `insert`, `eject` or `any` in lowercase and defaults to `any`.
 
-You can specify a list of USB devices using their **Vendor ID (VID)** and **Product ID (PID)**, along with an event type.
-
-#### Load module with a single device trigger on insertion/ejection (default)
-
-```bash
-make load USB_DEVICES="1234:5678" EXEC="/path/to/script"
+```
+options wrong8007 usb_devices=1234:5678                     # insert or removal
+options wrong8007 usb_devices=1234:5678:eject               # removal only
+options wrong8007 usb_devices=1234:5678:insert,abcd:ef00:any
 ```
 
-#### Trigger on removal (eject)
+#### Device matching modes
 
-```bash
-make load USB_DEVICES="1234:5678:eject" EXEC="/path/to/script"
-```
+* `whitelist=0` _(default)_: listed devices trigger execution and every other device is ignored.
+* `whitelist=1`: listed devices are ignored and any other add or remove event triggers execution.
 
-#### Trigger on any USB event (insert or remove)
-
-```bash
-make load USB_DEVICES="1234:5678:any" EXEC="/path/to/script"
-```
-
-#### Trigger on multiple devices at once
-
-```bash
-make load USB_DEVICES="1234:5678:insert,abcd:ef00:any" EXEC="/path/to/script"
-```
-
-#### Device matching modes: Whitelist vs. Blacklist
-
-Use the `WHITELIST` param:
-
-* `WHITELIST=0` _(default)_: Listed devices trigger execution; all other devices are ignored.
-* `WHITELIST=1`: Listed devices are ignored; any non-matching add/remove event triggers execution.
+`CONFIG_WRONG8007_WHITELIST` sets the default at build time.
 
 > [!CAUTION]
-> Whitelist mode is intentionally broad. Unlisted USB activity may trigger execution unexpectedly.
-
-**Example:**
-
-```bash
-make load USB_DEVICES="1234:5678:any" WHITELIST=1 EXEC="/path/to/script"
-```
-
-#### Find your device VID & PID
-
-Use:
-
-```bash
-lsusb
-```
+> Whitelist mode is intentionally broad. List every internal USB device (webcam, Bluetooth, fingerprint reader and hubs). Ordinary hotplug and resume from suspend can trigger execution otherwise.
 
 > [!NOTE]
-> USB rules are validated during module initialization.
->
-> - Rules must use the format `VID:PID[:EVENT]`.
-> - Invalid rules prevent the module from loading.
-> - If no rules are configured, the USB trigger remains disabled.
+> An invalid rule stops the module from loading. Without rules the USB trigger stays disabled.
 
 ## Network-based triggers
 
-The network trigger can activate on observed MAC addresses, IPv4 addresses, UDP/TCP payloads, or heartbeat timeouts.
+The network trigger inspects incoming IPv4 packets. Every `match_` condition you set must hold for the same packet. The [heartbeat](#heartbeat) works on its own.
 
-### Usage
+| Parameter | Matches |
+|---|---|
+| `match_mac=aa:bb:cc:dd:ee:ff` | Source MAC (12 hex digits or six pairs joined by `:` or `-`) |
+| `match_ip=192.168.1.1` | Source IPv4 address |
+| `match_port=1234` | TCP or UDP source or destination port |
+| `match_payload=MAGIC` | String anywhere in the TCP or UDP payload (up to 512 bytes) |
 
-#### Trigger on specific MAC address
+#### Magic packet
 
-Trigger when any packet from this MAC address is seen on the interface:
+A single UDP packet with a known payload acts as a remote kill switch:
 
-```bash
-make load MATCH_MAC='aa:bb:cc:dd:ee:ff' EXEC="/path/to/script"
+```
+options wrong8007 exec=/usr/local/sbin/wipe match_port=1234 match_payload=MAGIC
 ```
 
-#### Trigger on specific IP address
-
-Trigger only when a packet originates from the matching IPv4 address:
+Build the companion tool:
 
 ```bash
-make load MATCH_IP='192.168.1.1' EXEC="/path/to/script"
+make -C tools
 ```
 
-#### Trigger on port + payload (Magic packet)
-
-Send a single UDP packet with a known payload - acts as a remote kill switch:
+Send the packet from another machine:
 
 ```bash
-make load MATCH_PORT=1234 MATCH_PAYLOAD='MAGIC' EXEC="/path/to/script"
+./tools/wrong8007ctl send <target-ip> 1234 MAGIC
 ```
 
-Send it using the provided helper:
+#### Heartbeat
 
-```bash
-python3 scripts/whisperer.py 192.168.1.1 1234 "MAGIC"
+The trigger fires when no packet from `heartbeat_host` arrives within `heartbeat_timeout` seconds:
+
+```
+options wrong8007 exec=/usr/local/sbin/wipe heartbeat_host=192.168.1.1 heartbeat_interval=10 heartbeat_timeout=30
 ```
 
-#### Heartbeat-based trigger
-
-Trigger if no packet from a host is received for a set duration:
+Any IPv4 packet from that host counts. Run this on the host to send heartbeats on purpose:
 
 ```bash
-make load HEARTBEAT_HOST='192.168.1.1' HEARTBEAT_INTERVAL=10 HEARTBEAT_TIMEOUT=30 EXEC="/path/to/script"
-```
-
-Use the heartbeat sender script to periodically "ping" the module from the host:
-
-```bash
-python3 scripts/heartbeat.py 192.168.1.1 1234
+./tools/wrong8007ctl heartbeat <target-ip> 1234 -i 10
 ```
 
 > [!NOTE]
-> #### MAC/IP trigger behavior
-> MAC-only triggers can activate immediately and unexpectedly on any Ethernet frame from the matching device, including ARP and broadcast traffic.
+> The timeout starts counting at load. The trigger fires when no heartbeat arrives within `heartbeat_timeout` seconds of loading (for example during boot).
+
+> [!NOTE]
+> #### MAC and IP-only triggers
+> A MAC-only or IP-only trigger fires on the first IPv4 packet from that device, routine traffic included. On a network where the device is already active that can happen right after load.
 >
-> IP-only triggers activate only after a valid IPv4 packet is observed.
->
-> Because of this, if you're using MAC- or IP-only triggers on devices already active on the same network, you risk triggering the payload immediately on load, which can lead to unintended consequences.
->
-> MAC/IP-only triggers are not useless, they can shine in:
->
-> - Air-gapped or controlled environments
-> - Proximity-based activation
-> - Triggers that rely on the appearance of a trusted device
->
-> Prefer **payload-based triggers** when operator control over activation is required.
+> They suit air-gapped or controlled environments, proximity-based activation and triggers that rely on a trusted device appearing. Prefer **payload-based triggers** when you want control over activation.
 
 ## Contributing
 

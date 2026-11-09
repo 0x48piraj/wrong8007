@@ -1,0 +1,79 @@
+mainmenu "Wrong Boot configuration"
+
+#
+# Kconfig selects the trigger backends compiled into wrong8007.ko and the
+# default policies.
+#
+# Trigger values (phrase, USB rules, network matches and the execution
+# path) are module parameters read at load from a root-only
+# /etc/wrong8007/wrong8007.conf. See configs/wrong8007.conf.example.
+#
+
+menuconfig WRONG8007
+    bool "Wrong Boot"
+    default y
+    help
+      Enable the Wrong Boot kernel module.
+
+      The options below select the trigger backends compiled into the
+      module. A backend left out cannot be armed at load time.
+
+if WRONG8007
+
+config WRONG8007_KEYBOARD
+    bool "Keyboard trigger"
+    default y
+    help
+      Compile in the keyboard phrase trigger.
+
+      The trigger watches resolved printable keyboard input and activates
+      when the phrase in the "phrase" module parameter is typed exactly.
+      Matching is case-sensitive.
+
+config WRONG8007_USB
+    bool "USB trigger"
+    default y
+    help
+      Compile in the USB insertion and removal trigger.
+
+      Device rules come from the "usb_devices" module parameter as
+      VID:PID[:EVENT] entries separated by commas. EVENT is insert, eject
+      or any.
+
+config WRONG8007_WHITELIST
+    bool "Whitelist mode by default"
+    depends on WRONG8007_USB
+    default n
+    help
+      Default USB policy when the "whitelist" module parameter is absent.
+
+      Disabled (blacklist) means listed USB devices activate Wrong Boot.
+
+      Enabled (whitelist) means listed devices are ignored and any other
+      USB insertion or removal activates Wrong Boot. List every internal
+      USB device (webcam, Bluetooth and fingerprint reader) in whitelist
+      mode. Ordinary hotplug and resume from suspend activate it
+      otherwise.
+
+config WRONG8007_NETWORK
+    bool "Network trigger"
+    default y
+    help
+      Compile in the IPv4 network trigger. It matches source MAC, source
+      IP, TCP or UDP port and payload string and runs a heartbeat (dead
+      man's switch).
+
+      The conditions come from the match_* and heartbeat_* module
+      parameters.
+
+menu "Diagnostics"
+
+config WRONG8007_DEBUG
+    bool "Verbose debug logging"
+    default n
+    help
+      Enable verbose Wrong Boot diagnostic logging.
+
+endmenu
+
+endif
