@@ -115,8 +115,6 @@ static int kbd_cb(struct notifier_block *nb, unsigned long action, void *data)
     if (clen <= 0)
         return NOTIFY_OK;
 
-    wb_dbg("kbd: keysym=0x%x, %d UTF-8 byte(s)\n", p->value, clen);
-
     // Avoid NULL deref of phrase_buf on teardown edge cases
     if (unlikely(!phrase_buf))
         return NOTIFY_OK;
@@ -169,7 +167,8 @@ static int trigger_keyboard_init(void)
         return ret;
     }
 
-    wb_info("keyboard trigger initialized (PHRASE=%s)\n", phrase);
+    /* Never log the phrase; any user can often read the kernel log */
+    wb_info("keyboard trigger initialized\n");
     return 0;
 }
 
