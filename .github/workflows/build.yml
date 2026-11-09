@@ -4,31 +4,77 @@ on:
   workflow_dispatch:
   push:
     branches: [ master ]
-    paths:
-      - "core.c"
-      - "include/**"
-      - "trigger/**"
-      - "Kbuild"
-      - "Makefile"
   pull_request:
-    paths:
-      - "core.c"
-      - "include/**"
-      - "trigger/**"
-      - "Kbuild"
-      - "Makefile"
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    name: linux ${{ matrix.kernel }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { kernel: "5.4.290",  runner: ubuntu-22.04 }
+          - { kernel: "5.10.236", runner: ubuntu-22.04 }
+          - { kernel: "5.15.180", runner: ubuntu-22.04 }
+          - { kernel: "6.1.134",  runner: ubuntu-24.04 }
+          - { kernel: "6.6.87",   runner: ubuntu-24.04 }
+          - { kernel: "6.12.23",  runner: ubuntu-24.04 }
+          - { kernel: "7.2.11",   runner: ubuntu-24.04 }
     steps:
-      - name: checkout repository
-        uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
-      - name: install kernel headers & build tools
+      - name: install build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential linux-headers-$(uname -r)
+          sudo apt-get install -y build-essential bc flex bison libelf-dev libssl-dev
 
-      - name: compile wrong8007
-        run: make
+      - name: restore kernel tree
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: linux-${{ matrix.kernel }}
+          key: kernel-prepared-${{ matrix.kernel }}-${{ matrix.runner }}-v2
+
+      - name: download and prepare kernel ${{ matrix.kernel }}
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          v=${{ matrix.kernel }}
+          curl -fsSL "https://cdn.kernel.org/pub/linux/kernel/v${v%%.*}.x/linux-$v.tar.xz" | tar -xJ
+          cd "linux-$v"
+          make -s defconfig
+          ./scripts/config -e MODULES -e MODULE_UNLOAD -e NETFILTER -e USB -e INPUT -e VT
+          make -s olddefconfig
+          make -s -j"$(nproc)" modules_prepare
+          # Required by make config
+          make -s scripts_basic
+          test -x scripts/kconfig/conf
+
+      - name: build every feature profile
+        run: |
+          kdir=$PWD/linux-${{ matrix.kernel }}
+          for profile in all keyboard usb network; do
+            echo "::group::profile $profile"
+            rm -f .config
+            cp configs/defconfig .config
+            case $profile in
+              keyboard) sed -i 's/^CONFIG_WRONG8007_USB=y/# CONFIG_WRONG8007_USB is not set/;s/^CONFIG_WRONG8007_NETWORK=y/# CONFIG_WRONG8007_NETWORK is not set/' .config ;;
+              usb)      sed -i 's/^CONFIG_WRONG8007_KEYBOARD=y/# CONFIG_WRONG8007_KEYBOARD is not set/;s/^CONFIG_WRONG8007_NETWORK=y/# CONFIG_WRONG8007_NETWORK is not set/' .config ;;
+              network)  sed -i 's/^CONFIG_WRONG8007_KEYBOARD=y/# CONFIG_WRONG8007_KEYBOARD is not set/;s/^CONFIG_WRONG8007_USB=y/# CONFIG_WRONG8007_USB is not set/' .config ;;
+            esac
+            make clean KDIR="$kdir" >/dev/null
+            # modules_prepare does not generate Module.symvers
+            make build KDIR="$kdir" KBUILD_MODPOST_WARN=1 WB_EXTRA_CFLAGS=-Werror
+            test -f wrong8007.ko
+            echo "::endgroup::"
+          done
+
+  tools:
+    name: shell tools
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: shellcheck
+        run: |
+          sudo apt-get install -y shellcheck
+          shellcheck -s sh tools/*.sh
