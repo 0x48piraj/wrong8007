@@ -355,6 +355,10 @@ static int trigger_network_init(void)
         wb_err("invalid IP format\n");
         return -EINVAL;
     }
+    if (match_port < 0 || match_port > 65535) {
+        wb_err("invalid port (expected 0-65535)\n");
+        return -EINVAL;
+    }
     if (payload_on) {
         payload_len = strlen(match_payload);
         if (payload_len > PAYLOAD_SCAN_WIN) {
