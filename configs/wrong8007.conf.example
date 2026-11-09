@@ -1,0 +1,30 @@
+# wrong8007 module configuration.
+#
+# Contains sensitive trigger values. Keep root-readable only (0600)
+# and outside /etc/modprobe.d to avoid inclusion in initramfs images.
+#
+# Setup:
+#   make params-init          # install this template with mode 0600
+#   sudoedit /etc/wrong8007/wrong8007.conf
+#   make params-check         # check it against your build
+#   make load-installed       # modprobe -C /etc/wrong8007/wrong8007.conf wrong8007
+#
+# Configure only triggers enabled in the build profile (see .config).
+# Quote values containing whitespace. Multiple options lines are allowed;
+# the last value of a repeated parameter takes precedence.
+
+# Required. Absolute canonical path to the executable. Scripts require a shebang.
+#options wrong8007 exec=/usr/local/sbin/wrong8007-action
+
+# Keyboard trigger (requires CONFIG_WRONG8007_KEYBOARD).
+#options wrong8007 phrase="correct horse battery"
+
+# USB trigger (requires CONFIG_WRONG8007_USB). EVENT is insert, eject or any.
+#options wrong8007 usb_devices=1234:5678:insert,abcd:ef00:any
+#options wrong8007 whitelist=0
+
+# Network trigger (requires CONFIG_WRONG8007_NETWORK).
+#options wrong8007 match_mac=aa:bb:cc:dd:ee:ff
+#options wrong8007 match_ip=192.168.1.50
+#options wrong8007 match_port=1234 match_payload="magicstring"
+#options wrong8007 heartbeat_host=192.168.1.1 heartbeat_interval=10 heartbeat_timeout=30

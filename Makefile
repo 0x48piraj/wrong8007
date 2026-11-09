@@ -26,6 +26,10 @@ DOTCONFIG := $(ROOT)/.config
 # Default profile used to seed .config
 CONFIG ?= $(ROOT)/configs/defconfig
 
+# Runtime parameters; keep secrets outside modprobe.d for obvious reasons
+PARAMS ?= /etc/wrong8007/wrong8007.conf
+PARAMS_TEMPLATE := $(ROOT)/configs/wrong8007.conf.example
+
 CONFIG_DIR := $(ROOT)/include/config
 GENERATED_DIR := $(ROOT)/include/generated
 
@@ -43,6 +47,7 @@ KCONFIG_ENV := KBUILD_KCONFIG="$(KCONFIG)" \
 
 .PHONY: all \
 	nconfig menuconfig oldconfig config validate defconfig \
+	params-init params-check \
 	build install uninstall load load-installed remove reload clean
 
 all: build
@@ -113,6 +118,28 @@ validate:
 
 
 #
+# Install the parameter template as a root-only file if absent.
+#
+
+params-init:
+	@if sudo test -e "$(PARAMS)"; then \
+		echo "$(PARAMS) already exists; edit it with: sudoedit $(PARAMS)"; \
+	else \
+		sudo install -d -m 0700 -o root -g root "$(dir $(PARAMS))" && \
+		sudo install -m 0600 -o root -g root "$(PARAMS_TEMPLATE)" "$(PARAMS)" && \
+		echo "installed $(PARAMS) (mode 0600); edit it with: sudoedit $(PARAMS)"; \
+	fi
+
+
+#
+# Validate parameters against the selected Kconfig profile.
+#
+
+params-check: config
+	@sudo sh "$(ROOT)/tools/params.sh" check "$(DOTCONFIG)" "$(PARAMS)"
+
+
+#
 # Build only when enabled in .config.
 #
 
@@ -135,7 +162,9 @@ install: build
 
 
 #
-# Load the locally built module.
+# Load the locally built module with configured parameters.
+#
+# Warning: insmod parameters may be visible in process listings.
 #
 
 load: build
@@ -144,10 +173,15 @@ load: build
 		echo "the module is disabled in the current Kconfig profile."; \
 		exit 1; \
 	}
-	sudo insmod "$(ROOT)/wrong8007.ko"
+	@sudo sh "$(ROOT)/tools/params.sh" insmod "$(DOTCONFIG)" "$(PARAMS)" "$(ROOT)/wrong8007.ko"
 
-load-installed:
-	sudo modprobe wrong8007
+
+#
+# Load the installed module using the dedicated configuration.
+#
+
+load-installed: params-check
+	sudo modprobe -C "$(PARAMS)" wrong8007
 
 
 #
