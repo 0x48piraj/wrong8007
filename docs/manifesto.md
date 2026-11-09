@@ -16,11 +16,11 @@ Wrong Boot chooses the kernel as its event-detection and enforcement boundary be
 
 User space may be:
 
-* Unavailable,
-* Compromised,
-* Misconfigured,
-* Intentionally stopped or
-* Simply too late to respond.
+* Unavailable
+* Compromised
+* Misconfigured
+* Intentionally stopped
+* Simply too late to respond
 
 For that reason, trigger detection lives entirely in kernel space and relies on existing kernel subsystems rather than long-running daemons or polling loops.
 
@@ -79,10 +79,10 @@ Triggers answer exactly one question:
 
 They do not decide:
 
-- What should happen,
-- When it should happen,
-- Whether another trigger should win,
-- Whether execution remains available.
+- What should happen
+- When it should happen
+- Whether another trigger should win
+- Whether execution remains available
 
 Those responsibilities belong exclusively to the core.
 
@@ -94,7 +94,7 @@ The implementation details of this model, including the activation latch and wor
 
 Wrong Boot prefers refusing to operate over silently accepting ambiguous, incomplete or partially valid configurations.
 
-Configuration is therefore validated before the module becomes active and trigger initialization is treated as part of the module's overall readiness.
+Configuration is therefore validated before the module becomes active and trigger initialization is treated as part of the module's overall readiness. The module arms only after every trigger is up. `make params-check` goes further and refuses values the kernel would quietly ignore.
 
 If the module cannot establish the conditions required for its configured operation, it should not silently continue with only part of that configuration active.
 
@@ -111,7 +111,7 @@ The project therefore favors:
 * Clear ownership
 * Clean state transitions
 * Strict configuration
-* Nominal coupling
+* Minimal coupling
 * Straightforward control flow
 * Well-defined lifecycle behavior
 
@@ -149,7 +149,7 @@ The specific trigger interface, lifecycle contract and contributor requirements 
 
 Wrong Boot does not prescribe what the configured action should accomplish. It defines **when** execution may occur, not **what** the operator ultimately chooses to execute.
 
-Whether the configured action archives evidence, sends an alert, locks a system, initiate a recovery procedure, destroys data, or performs something entirely different is outside the module's scope.
+Whether the configured action archives evidence, sends an alert, locks a system, initiates a recovery procedure, destroys data or performs something entirely different is outside the module's scope.
 
 > _The project provides the mechanism. The operator defines the policy._
 
@@ -176,13 +176,13 @@ The implementation _may change_. The design constraints _should not_.
 When changing Wrong Boot, keep these boundaries intact:
 
 * **Decide before the incident.** If an event matters, detect it where it can still be observed and acted on.
-* **Keep detection and execution separate.** Triggers report conditions, the core owns execution.
+* **Keep detection and execution separate.** Triggers report conditions and the core owns execution.
 * **Keep execution policy centralized.** New triggers should not implement their own execution paths.
 * **Fail closed.** If a trigger cannot establish the resources it needs, initialization should fail rather than leave a partially working trigger behind.
 * **Keep it simple, stupid.** Prefer simple control flow and predictable behavior.
 * **Limit assumptions.** A trigger should depend only on what it actually needs from the surrounding system.
 * **Keep triggers independent.** Adding one trigger should not require changes to unrelated triggers.
-* **Leave the action to the operator.** Wrong Boot provides the mechanism, the configured payload determines what happens.
+* **Leave the action to the operator.** Wrong Boot provides the mechanism and the configured payload determines what happens.
 
 These are the questions to ask when reviewing a change:
 

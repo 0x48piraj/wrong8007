@@ -1,6 +1,6 @@
 # Security model
 
-This document describes the **security consequences, trust boundaries, guarantees and limitations** of project's design.
+This document describes the **security consequences, trust boundaries, guarantees and limitations** of the project's design.
 
 It exists to prevent ambiguity, misuse and incorrect assumptions by users, auditors and contributors.
 
@@ -12,11 +12,11 @@ Wrong Boot is designed for systems where the operator has control of the machine
 
 The model assumes:
 
-* The operator can load and configure the kernel module before the relevant incident,
-* The kernel is trusted at the time the module is loaded,
-* The configured action is intentionally chosen by the operator,
-* Trigger inputs such as keyboard events, USB events and network traffic may originate from untrusted sources,
-* User-space processes may become unavailable, compromised or too late to respond,
+* The operator can load and configure the kernel module before the relevant incident.
+* The kernel is trusted at the time the module is loaded.
+* The operator chose the payload on purpose.
+* Trigger inputs (keyboard events, USB events and network traffic) may come from untrusted sources.
+* User-space processes may become unavailable, compromised or too late to respond.
 * The system may become physically or logically hostile after activation.
 
 The model does **not** assume that Wrong Boot can remain secure against an attacker who already controls the kernel.
@@ -48,7 +48,7 @@ A kernel-level attacker can potentially:
 * Replace or interfere with the execution mechanism
 * Observe or alter kernel-resident configuration
 
-Wrong boot therefore provides no meaningful protection against an _already-compromised_ kernel.
+Wrong Boot therefore provides no meaningful protection against an _already-compromised_ kernel.
 
 ### User space
 
@@ -56,7 +56,7 @@ Wrong Boot does not depend on a user-space daemon to remain alive to observe tri
 
 Detection and activation happen at the kernel boundary. The configured action is then deliberately handed back to user space.
 
-This creates an asymmetric boundary. The kernel is used to preserve the ability to **detect and authorize** the response, while the consequence of that response is intentionally delegated to the configured user-space command.
+This creates an asymmetric boundary. The kernel is used to preserve the ability to **detect and authorize** the response, while the consequence of that response is intentionally delegated to the configured payload.
 
 The activation latch and deferred execution path are implementation details covered in [development.md](development.md).
 
@@ -76,15 +76,13 @@ This requirement is intentional.
 
 Wrong Boot is not a privilege-escalation mechanism. It assumes the operator already has sufficient control of the system to install and configure kernel code.
 
-Once loaded, the module executes in kernel context and its configured user-space action is invoked through the kernel's User Mode Helper mechanism.
+The loaded module runs in kernel context and starts the payload through the kernel's User Mode Helper. The payload runs as root with kernel credentials and the full capability set (the `kernel.usermodehelper.bset` sysctl can narrow it). No user session restricts it.
 
-The resulting action therefore runs with the privileges available to that execution path, rather than with the restricted privileges of an ordinary unprivileged application.
-
-The configured action should consequently be treated as a **high-privilege operation**.
+Treat the payload as a **high-privilege operation**. Keep the file, its interpreter and everything it calls writable by root only.
 
 ## Kernel/user-space execution boundary
 
-Trigger detection occurs at the kernel boundary. When a trigger condition is satisfied, the core decides whether execution should proceed and defers the configured action out of the trigger context.
+Trigger detection occurs at the kernel boundary. The core decides whether execution proceeds when a trigger condition holds and defers the payload out of the trigger context.
 
 The action is then handed back to user space through the kernel's User Mode Helper mechanism.
 
@@ -97,7 +95,7 @@ The configured action therefore inherits the privileges and execution environmen
 
 ## One-shot execution guarantee
 
-All triggers converge on a single execution latch. At most one activation can consume it even when multiple triggers activate concurrently.
+All triggers converge on a single execution latch. At most one activation can consume it even when multiple triggers activate concurrently. The latch is armed only after every trigger has initialized. A load that fails never runs the payload.
 
 ```mermaid
 flowchart LR
@@ -121,23 +119,15 @@ The result is an **at-most-once execution guarantee**, not a guarantee that ever
 
 The activation latch and deferred execution mechanics are described in [development](development.md).
 
-## Module unload and payload lifetime
+## Payload lifetime
 
-The configured action is not detached from the module's lifecycle.
+A started payload is detached from the module. The core waits only until the payload has started (`UMH_WAIT_EXEC`) and never collects its exit status.
 
-Because the execution work uses `UMH_WAIT_PROC`, the work item remains active while the spawned user-space command is running.
+* Unloading the module neither waits for a running payload nor stops it.
+* An attempt that has not started yet (a pending retry) is dropped on unload and logged.
+* A payload that failed after starting is never run again.
 
-During module removal, the core flushes the execution work:
-
-```c
-flush_work(&exec_work);
-```
-
-Therefore, removing the module while its configured action is still executing can block until that action terminates.
-
-This is an operational consequence of the execution model rather than a recovery mechanism.
-
-Operators should test payload termination behavior before relying on module removal as part of an incident-response procedure.
+Removing the module is therefore no way to stop a payload that already runs. Stop the process itself. Test how your payload behaves before you rely on it in an incident.
 
 ## Interception position
 
@@ -147,33 +137,26 @@ This means stopping or modifying the user-space application that would normally 
 
 The exact visibility and ordering of an event depend on the subsystem and hook used by the trigger. A kernel-level attacker remains outside the protection model.
 
-## Configuration exposure
+## Secrets and their exposure
 
-Module parameters are not secret storage.
+The phrase, the USB rules, the network values and the payload path are secrets. Wrong Boot keeps them in as few places as it can:
 
-Configuration supplied to the module may be exposed through kernel mechanisms such as:
+* **The parameter file** `/etc/wrong8007/wrong8007.conf` is readable by root only (mode `0600` in a `0700` directory).
+* **Not in the boot image.** The file stays out of `/etc/modprobe.d`. Initramfs tools copy that directory into the usually unencrypted `/boot`. `make params-check` refuses `wrong8007` options there.
+* **Not on a command line.** `make load-installed` hands the file to `modprobe`. Only the development target `make load` passes values to `insmod`, where the process list briefly shows them.
+* **Not in sysfs.** The parameters are registered without sysfs entries and `/sys/module/wrong8007/parameters/` does not list them.
+* **Not in the source tree or the module.** Nothing secret is compiled into `wrong8007.ko`.
+* **Not in the kernel log.** The phrase and the payload string never appear in it. A USB rule or MAC address that fails to parse is echoed in the load error so you can find the mistake.
 
-```text
-/sys/module/wrong8007/parameters/
-```
+The values still exist in plain text in that file and in kernel memory while the module is loaded. Root, anything with kernel read access and anyone holding the unencrypted disk can read them.
 
-Depending on the parameter and system configuration, values may therefore be observable by privileged or otherwise permitted local processes.
-
-The same principle applies to logging.
-
-Trigger and execution diagnostics may expose operational information through the kernel logging system.
-
-Consequently:
-
-> **A trigger phrase, network matching value, USB rule or configured command should not be treated as confidential merely because it was supplied to the kernel module.**
-
-Operators should avoid treating module parameters as a secure secret-management mechanism.
+> **Parameter values are hidden from other users and readable by root and the kernel.**
 
 ## Payload security
 
 The project deliberately does not prescribe what the configured action should do.
 
-A payload may record information, notify another system, isolate the machine, start recovery, modify system state, destroy information, or perform another operator-defined action.
+A payload may record information, notify another system, isolate the machine, start recovery, modify system state, destroy information or perform another operator-defined action.
 
 The module therefore cannot guarantee that a payload is safe.
 
@@ -183,17 +166,18 @@ In particular, a malicious, accidental or poorly tested command can cause signif
 
 ## Guarantees and limitations
 
-Wrong Boot provides architectural guarantees, but its behavior still depends on the kernel, the surrounding system and the configured payload.
+Wrong Boot provides architectural guarantees. Its behavior still depends on the kernel, the surrounding system and the configured payload.
 
 ### Architectural guarantees
 
 The design provides:
 
 * Centralized activation arbitration
-* At-most-once execution
+* At-most-once start of the payload per load
 * Separation between trigger detection and execution
-* Fail-closed initialization
+* Fail-closed initialization that never runs the payload
 * Deferred execution from trigger contexts
+* A bounded retry window for a payload that fails to start
 
 ### Environment-dependent behavior
 
@@ -203,7 +187,7 @@ The following remain dependent on the surrounding system:
 * Availability of the required kernel subsystems
 * Successful module loading
 * User-space process creation
-* Availability of `/bin/sh` and other execution components
+* Availability of the payload, its interpreter and the tools it calls
 * Completion of the configured payload
 
 ### Outside the model
@@ -215,8 +199,8 @@ Wrong Boot does not protect against:
 * Incorrect trigger or payload configuration
 * Runtime failure of the underlying trigger subsystem
 * Failure or unintended behavior of the configured payload
-* Physical loss, destruction, or power-off of the machine
-* Confidentiality loss of module parameters or diagnostic information
+* Physical loss, destruction or power-off of the machine
+* Disclosure of parameter values to root or to the kernel
 
 Any general system-security failures outside the module's scope.
 
@@ -233,11 +217,11 @@ Wrong Boot is not intended to:
 * Guarantee that an arbitrary payload is safe
 * Modify kernel memory outside its own scope
 
-If you are looking for covert channels, or evasion techniques, this project is **not for you**.
+If you are looking for covert channels or evasion techniques, this project is **not for you**.
 
 ## Operational and ethical boundary
 
-Wrong Boot is intended for systems the operator owns or is explicitly authorized to control.
+Wrong Boot is intended for systems the operator owns or is authorized to control.
 
 The module provides a mechanism for pre-configured detection and response. The operator remains responsible for:
 
@@ -245,6 +229,6 @@ The module provides a mechanism for pre-configured detection and response. The o
 * Protecting access to the module and its configuration
 * Testing the configured payload
 * Understanding its consequences
-* Complying with applicable laws, policies, and organizational controls
+* Complying with applicable laws, policies and organizational controls
 
-The authors make **no claim** that this tool is suitable for offensive, covert, or unauthorized use. Using it to damage systems you don't own or have permission to modify is illegal.
+The authors make **no claim** that this tool is suitable for offensive, covert or unauthorized use. Using it to damage systems you do not own or have no permission to modify is illegal.
