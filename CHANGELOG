@@ -1,0 +1,94 @@
+# Changelog
+
+Notable changes to Wrong Boot (wrong8007).
+
+## 0.1.0 (2026-11-10)
+
+This release moves trigger selection to Kconfig and trigger values to a root-only parameter file, runs the payload without a shell and fixes the bugs found along the way.
+
+### Configuration
+
+* Kconfig build profiles that choose which triggers are compiled into the module (`make menuconfig`, `configs/defconfig`)
+* Load parameters in `/etc/wrong8007/wrong8007.conf` with mode `0600` (`make params-init`, `make params-check`, `make load-installed`)
+* Parameters in `/etc/wrong8007/wrong8007.conf` outside modprobe.d and the initramfs
+* Debug lines that never log a secret
+* Helper tools to check the build profile and parameter file against the build
+* A build with no trigger refused at compile time
+
+### Payload execution
+
+* Payload executed directly instead of through `/bin/sh -c`
+* Absolute `exec` path required at load
+* Own workqueue for the payload and its retries
+* Payload start and failure to start in the kernel log
+* Retry with backoff for a payload that fails to start
+* No second run for a payload that started
+* Unload that never waits for a running payload
+
+### Triggers
+
+* Keyboard matching on the characters the kernel resolves from each key press
+* Knuth-Morris-Pratt phrase matcher (`lib/phrase_match.c`)
+* Strict USB rule and MAC address parsing (`lib/parse.c`)
+* Hardened packet parsing in the network trigger
+* Netfilter hook registered only when a network condition is set
+
+### Tooling
+
+* `wrong8007ctl` with `send`, `heartbeat` and `usb-list` in place of the Python and shell helpers
+* CI build of every trigger profile against kernels 5.4 to 7.2
+
+### Fixes
+
+* Phrase with a repeated beginning missed (`aab` typed as `aaab`)
+* Port-only network trigger that never fired
+* Empty string parameter (`match_mac=`) that stopped the module from loading
+* Trigger phrase written to the kernel log at load and keysyms logged in debug builds
+* Reject out-of-range `match_port` values at module load
+* Use-after-free on failed load and activation during a partial init
+* Build on Linux 7.2 where `hex_to_bin()` moved to `<linux/hex.h>`
+* Payload offsets computed relative to `skb->data`
+* Duplicated `wrong8007:` prefix in a log line
+* Failed load that could leave the payload work queued after the module was freed
+* Activation accepted while later triggers were still loading
+
+### Breaking changes
+
+* `make load PHRASE=... EXEC=...` removed. Put the values in `/etc/wrong8007/wrong8007.conf`.
+* Shell commands no longer accepted as `exec`. Point it at an executable file.
+* Malformed USB rules and MAC addresses refused at load instead of partly read.
+* `scripts/` helpers removed. Use `wrong8007ctl`.
+
+## 0.0.1 (2025-12-19)
+
+First tagged release of the kernel module rewrite.
+
+### Core
+
+* Pluggable trigger interface where triggers report a condition and the core owns execution
+* Fail-closed initialization that unwinds in reverse order on a partial failure
+* One-shot execution held by an atomic latch
+* Payload run from a workqueue through the usermode helper
+
+### Triggers
+
+* Keyboard phrase matching under a spinlock in notifier context
+* USB rules (`VID:PID[:EVENT]`) for several devices with whitelist and blacklist modes
+* Network matching on source MAC, source IPv4, TCP or UDP port and payload string
+* Heartbeat timer as a dead man's switch
+
+### Project
+
+* `make load`, `make remove` and `make reload`
+* Logging macros, SPDX headers and GPL-2.0 for `EXPORT_SYMBOL_GPL` compatibility
+* CI build workflows with issue and pull request templates
+* Design philosophy, security model, development guide and data destruction notes
+* Example wipe payload
+
+### Fixes
+
+* Kernel crash from running the helper in atomic context
+* `skb` header checks and a payload size underflow on malformed packets
+* Separate parsing state for `match_ip` and `heartbeat_host`
+* Spaces kept in string module parameters
+* Negative key values guarded
