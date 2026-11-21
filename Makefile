@@ -219,11 +219,11 @@ dkms-install:
 		echo "error: dkms not found; install it from your distribution"; \
 		exit 1; \
 	}
-	-@sudo dkms remove "wrong8007/$(VERSION)" --all >/dev/null 2>&1
+	@sudo dkms remove "wrong8007/$(VERSION)" --all >/dev/null 2>&1 || true
 	sudo rm -rf "$(SRCDIR)"
 	sudo $(MAKE) -C "$(ROOT)" BINDIR="$(BINDIR)" DATADIR="$(DATADIR)" UNITDIR="$(UNITDIR)" install-files
 	sudo dkms install "wrong8007/$(VERSION)"
-	-@sudo systemctl daemon-reload 2>/dev/null
+	@sudo systemctl daemon-reload 2>/dev/null || true
 
 
 #
@@ -234,11 +234,11 @@ dkms-install:
 
 dkms-uninstall: remove
 	@test -n "$(VERSION)" || { echo "error: no PACKAGE_VERSION in dkms.conf"; exit 1; }
-	-@sudo systemctl disable --now wrong8007.service >/dev/null 2>&1
+	@sudo systemctl disable --now wrong8007.service >/dev/null 2>&1 || true
 	-sudo dkms remove "wrong8007/$(VERSION)" --all
 	sudo rm -rf "$(SRCDIR)" "$(DATADIR)/wrong8007"
 	sudo rm -f "$(BINDIR)/wrong8007-params" "$(UNITDIR)/wrong8007.service"
-	-@sudo systemctl daemon-reload 2>/dev/null
+	@sudo systemctl daemon-reload 2>/dev/null || true
 
 
 #
