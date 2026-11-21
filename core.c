@@ -37,6 +37,7 @@
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("03C0");
 MODULE_DESCRIPTION("wrong8007 is an equivalent of a burner phone");
+MODULE_VERSION(WRONG8007_VERSION);
 
 static char *exec;
 module_param(exec, charp, 0000);

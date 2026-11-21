@@ -1,0 +1,13 @@
+[Unit]
+Description=A programmable kernel-resident dead man's switch for last-resort execution.
+Documentation=https://raj.foundation/wrong8007/
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStartPre=wrong8007-params check
+ExecStart=modprobe -C /etc/wrong8007/wrong8007.conf wrong8007
+ExecStop=modprobe -r wrong8007
+
+[Install]
+WantedBy=multi-user.target
