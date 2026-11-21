@@ -2,6 +2,38 @@
 
 Notable changes to Wrong Boot (wrong8007).
 
+## 0.1.1 (2026-11-22)
+
+This release installs Wrong Boot through DKMS and builds the module without the kernel's Kconfig tools. DKMS rebuilds the module for every kernel you install and a systemd unit arms it at boot.
+
+### Packaging
+
+* DKMS configuration (`dkms.conf`) that rebuilds the module for every installed kernel from 5.4 on
+* `make dkms-install` and `make dkms-uninstall`
+* `make install-files` with `DESTDIR` and `PREFIX` for distribution packages
+* Build profile for DKMS builds in `/etc/wrong8007/build.config`
+* `wrong8007.service` that checks the parameters and loads the module at boot
+* Module version in `modinfo`
+
+### Configuration
+
+* Build profile read by Kbuild itself with no generated files
+* Every trigger built from `configs/defconfig` when there is no `.config`
+* `make menuconfig`, `make guiconfig`, `make oldconfig` and `make olddefconfig` through Kconfiglib
+* Warning for a profile that lacks an option Kconfig turns on by default
+* Parameter check against the installed module (`wrong8007-params check`)
+
+### Tooling
+
+* CI installation through DKMS on the runner's kernel
+* CI check that `configs/defconfig` matches the Kconfig defaults
+
+### Breaking changes
+
+* `make menuconfig` needs Kconfiglib (`pip install kconfiglib`) and no longer builds the kernel's menu tool in the kernel build tree.
+* `make nconfig` removed. Use `make menuconfig`.
+* `make config` removed. `make` reads `.config` directly.
+
 ## 0.1.0 (2026-11-10)
 
 This release moves trigger selection to Kconfig and trigger values to a root-only parameter file, runs the payload without a shell and fixes the bugs found along the way.
