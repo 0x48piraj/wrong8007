@@ -46,9 +46,6 @@ jobs:
           ./scripts/config -e MODULES -e MODULE_UNLOAD -e NETFILTER -e USB -e INPUT -e VT
           make -s olddefconfig
           make -s -j"$(nproc)" modules_prepare
-          # Required by make config
-          make -s scripts_basic
-          test -x scripts/kconfig/conf
 
       - name: build every feature profile
         run: |
@@ -78,3 +75,15 @@ jobs:
         run: |
           sudo apt-get install -y shellcheck
           shellcheck -s sh tools/*.sh
+
+  kconfig:
+    name: kconfig defaults
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: defconfig matches the Kconfig defaults
+        run: |
+          pipx install kconfiglib
+          KCONFIG_CONFIG=defaults.config alldefconfig Kconfig
+          diff <(grep CONFIG_ defaults.config) <(grep CONFIG_ configs/defconfig)
+

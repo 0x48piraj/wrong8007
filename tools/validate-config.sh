@@ -40,6 +40,53 @@ onoff() {
     fi
 }
 
+# Prints each Kconfig symbol that defaults to y with the symbols it depends on
+kconfig_defaults() {
+    awk '
+    function flush() {
+        if (sym != "" && def == "y")
+            print sym, ifs, deps
+        sym = ""; deps = ""; def = ""; help = 0
+    }
+    function rebuild(  i) {
+        ifs = ""
+        for (i = 1; i <= n; i++)
+            ifs = ifs " " stack[i]
+    }
+    /^[ \t]*(menu)?config[ \t]/ { flush(); sym = $2; next }
+    /^[ \t]*if[ \t]/ { flush(); stack[++n] = $2; rebuild(); next }
+    /^[ \t]*endif([ \t#]|$)/ { flush(); n--; rebuild(); next }
+    /^[ \t]*(menu|endmenu|choice|endchoice|comment|source|mainmenu)([ \t]|$)/ { flush(); next }
+    sym == "" || help { next }
+    /^[ \t]*help[ \t]*$/ { help = 1; next }
+    /^[ \t]*depends[ \t]+on[ \t]/ {
+        sub(/^[ \t]*depends[ \t]+on[ \t]+/, "")
+        gsub(/&&/, " ")
+        deps = deps " " $0
+        next
+    }
+    /^[ \t]*default[ \t]+y[ \t]*$/ { def = "y" }
+    END { flush() }
+    ' "$1"
+}
+
+# Warn about options the profile lacks; they build as off whatever Kconfig says
+KCONFIG="$(dirname "$0")/../Kconfig"
+if [ -r "$KCONFIG" ]; then
+    kconfig_defaults "$KCONFIG" | while read -r sym deps; do
+        grep -Eq "^(CONFIG_$sym=|# CONFIG_$sym is not set)" "$CONFIG" && continue
+        met=y
+        for d in $deps; do
+            case "$d" in
+                *[!A-Za-z0-9_]*) met=n ;;
+                *) [ "$(get_bool "$d")" = y ] || met=n ;;
+            esac
+        done
+        [ "$met" = y ] || continue
+        echo "warning: $CONFIG lacks CONFIG_$sym; it builds as off though Kconfig turns it on (make olddefconfig fills in defaults)"
+    done
+fi
+
 # Master switch; a disabled module has nothing to check
 if [ "$(get_bool WRONG8007)" != y ]; then
     echo "Wrong Boot is disabled in this profile; the build produces no module."

@@ -8,8 +8,6 @@
 *.symvers
 modules.order
 
-# Kconfig artifacts
+# Build profile
 .config
 .config.old
-include/config/
-include/generated/

@@ -26,27 +26,16 @@ DOTCONFIG := $(ROOT)/.config
 # Default profile used to seed .config
 CONFIG ?= $(ROOT)/configs/defconfig
 
+# Build profile; .config when present
+PROFILE ?= $(firstword $(wildcard $(DOTCONFIG)) $(ROOT)/configs/defconfig)
+override PROFILE := $(abspath $(PROFILE))
+
 # Runtime parameters; keep secrets outside modprobe.d for obvious reasons
 PARAMS ?= /etc/wrong8007/wrong8007.conf
 PARAMS_TEMPLATE := $(ROOT)/configs/wrong8007.conf.example
 
-CONFIG_DIR := $(ROOT)/include/config
-GENERATED_DIR := $(ROOT)/include/generated
-
-AUTOCONFIG := $(CONFIG_DIR)/auto.conf
-AUTOHEADER := $(GENERATED_DIR)/wrong8007_config.h
-
-# Use the kernel tree's Kconfig host binary
-CONF_BIN := $(KDIR)/scripts/kconfig/conf
-
-# Kconfig input and output paths
-KCONFIG_ENV := KBUILD_KCONFIG="$(KCONFIG)" \
-	KCONFIG_CONFIG="$(DOTCONFIG)" \
-	KCONFIG_AUTOCONFIG="$(AUTOCONFIG)" \
-	KCONFIG_AUTOHEADER="$(AUTOHEADER)"
-
 .PHONY: all \
-	nconfig menuconfig oldconfig config validate defconfig \
+	menuconfig guiconfig oldconfig olddefconfig validate defconfig \
 	params-init params-check \
 	build install uninstall load load-installed remove reload clean
 
@@ -54,45 +43,17 @@ all: build
 
 
 #
-# Interactive Kconfig configuration.
+# Interactive configuration through Kconfiglib.
 #
 
-nconfig:
-	$(KCONFIG_ENV) $(MAKE) -C "$(KDIR)" nconfig
-	@$(MAKE) config
-	@$(MAKE) validate
-
-menuconfig:
-	$(KCONFIG_ENV) $(MAKE) -C "$(KDIR)" menuconfig
-	@$(MAKE) config
-	@$(MAKE) validate
-
-oldconfig:
-	$(KCONFIG_ENV) $(MAKE) -C "$(KDIR)" oldconfig
-	@$(MAKE) config
-	@$(MAKE) validate
-
-
-#
-# Generate Kconfig outputs from .config using the kernel's conf binary.
-#
-
-config:
-	@test -f "$(DOTCONFIG)" || { \
-		echo "no $(DOTCONFIG); using $(CONFIG)."; \
-		cp "$(CONFIG)" "$(DOTCONFIG)"; \
-	}
-	@test -x "$(CONF_BIN)" || { \
-		echo "error: kernel Kconfig host binary not found: $(CONF_BIN)"; \
-		echo "build it as root: sudo make -C \"$(KDIR)\" scripts/kconfig/conf"; \
+menuconfig guiconfig oldconfig olddefconfig:
+	@command -v $@ >/dev/null || { \
+		echo "error: $@ needs Kconfiglib (pip install kconfiglib)"; \
+		echo "editing $(DOTCONFIG) works too; start from: make defconfig"; \
 		exit 1; \
 	}
-	@mkdir -p "$(CONFIG_DIR)" "$(GENERATED_DIR)"
-	cd "$(ROOT)" && \
-	KCONFIG_CONFIG="$(DOTCONFIG)" \
-	KCONFIG_AUTOCONFIG="$(AUTOCONFIG)" \
-	KCONFIG_AUTOHEADER="$(AUTOHEADER)" \
-		"$(CONF_BIN)" --syncconfig "$(KCONFIG)"
+	cd "$(ROOT)" && KCONFIG_CONFIG="$(DOTCONFIG)" $@ "$(KCONFIG)"
+	@$(MAKE) validate PROFILE="$(DOTCONFIG)"
 
 
 #
@@ -105,7 +66,6 @@ defconfig:
 		exit 1; \
 	}
 	@cp "$(CONFIG)" "$(DOTCONFIG)"
-	@$(MAKE) config
 	@sh "$(ROOT)/tools/validate-config.sh" --summary "$(DOTCONFIG)"
 
 
@@ -114,7 +74,7 @@ defconfig:
 #
 
 validate:
-	@sh "$(ROOT)/tools/validate-config.sh" "$(DOTCONFIG)"
+	@sh "$(ROOT)/tools/validate-config.sh" "$(PROFILE)"
 
 
 #
@@ -132,20 +92,20 @@ params-init:
 
 
 #
-# Validate parameters against the selected Kconfig profile.
+# Validate parameters against the build profile.
 #
 
-params-check: config
-	@sudo sh "$(ROOT)/tools/params.sh" check "$(DOTCONFIG)" "$(PARAMS)"
+params-check:
+	@sudo sh "$(ROOT)/tools/params.sh" check "$(PROFILE)" "$(PARAMS)"
 
 
 #
-# Build only when enabled in .config.
+# Build only when enabled in the build profile.
 #
 
-build: config validate
-	@if grep -q '^CONFIG_WRONG8007=y' "$(DOTCONFIG)"; then \
-		$(MAKE) -C "$(KDIR)" M="$(ROOT)" modules; \
+build: validate
+	@if grep -q '^CONFIG_WRONG8007=y' "$(PROFILE)"; then \
+		$(MAKE) -C "$(KDIR)" M="$(ROOT)" WRONG8007_PROFILE="$(PROFILE)" modules; \
 	else \
 		$(MAKE) -C "$(KDIR)" M="$(ROOT)" clean; \
 		echo "module disabled; no module built."; \
@@ -157,7 +117,7 @@ build: config validate
 #
 
 install: build
-	sudo $(MAKE) -C "$(KDIR)" M="$(ROOT)" modules_install
+	sudo $(MAKE) -C "$(KDIR)" M="$(ROOT)" WRONG8007_PROFILE="$(PROFILE)" modules_install
 	sudo depmod -a
 
 
@@ -170,10 +130,10 @@ install: build
 load: build
 	@test -f "$(ROOT)/wrong8007.ko" || { \
 		echo "error: no $(ROOT)/wrong8007.ko built."; \
-		echo "the module is disabled in the current Kconfig profile."; \
+		echo "the module is disabled in the build profile."; \
 		exit 1; \
 	}
-	@sudo sh "$(ROOT)/tools/params.sh" insmod "$(DOTCONFIG)" "$(PARAMS)" "$(ROOT)/wrong8007.ko"
+	@sudo sh "$(ROOT)/tools/params.sh" insmod "$(PROFILE)" "$(PARAMS)" "$(ROOT)/wrong8007.ko"
 
 
 #
@@ -215,9 +175,8 @@ reload:
 
 
 #
-# Remove build artifacts and generated Kconfig files.
+# Remove build artifacts.
 #
 
 clean:
-	$(MAKE) -C "$(KDIR)" M="$(ROOT)" clean
-	rm -rf "$(CONFIG_DIR)" "$(GENERATED_DIR)"
+	$(MAKE) -C "$(KDIR)" M="$(ROOT)" WRONG8007_PROFILE="$(PROFILE)" clean

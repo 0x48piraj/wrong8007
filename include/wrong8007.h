@@ -12,8 +12,6 @@
 #include <linux/module.h>
 #include <linux/workqueue.h>
 
-#include <wrong8007_config.h>
-
 #define WB_TAG "wrong8007: "
 
 #ifdef DEBUG

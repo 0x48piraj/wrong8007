@@ -61,7 +61,7 @@ Build it with every trigger:
 make
 ```
 
-Run `make menuconfig` to compile in only the triggers you use. It needs a writable kernel build tree (usually root). Editing `.config` and running `make` works too. A trigger you leave out adds no code to your kernel.
+Run `make menuconfig` to compile in only the triggers you use. Needs [Kconfiglib](https://github.com/ulfalizer/Kconfiglib) (`pip install kconfiglib`). Editing `.config` and running `make` works too (`make defconfig` writes one with every trigger). A trigger you leave out adds no code to your kernel.
 
 ### 2. Write the parameters
 
