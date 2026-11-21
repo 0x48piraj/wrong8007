@@ -110,6 +110,71 @@ It runs `modprobe -C /etc/wrong8007/wrong8007.conf wrong8007`. A plain `modprobe
 
 `make load` loads the module you just built without installing it. It's meant for development. It passes the parameters on the `insmod` command line where other users can briefly see them in the process list.
 
+### Install with DKMS
+
+DKMS rebuilds the module whenever you install a new kernel.
+
+Install `dkms` then run:
+
+```bash
+make dkms-install
+```
+
+This installs the source under `/usr/src/wrong8007-<version>` and places `wrong8007-params` and `wrong8007.service` under `/usr/local`.
+
+**Build profiles:** DKMS builds every trigger by default. To select your own, copy a build profile to `/etc/wrong8007/build.config` (`.config` works too).
+
+DKMS picks it up on the next build. Run `make dkms-install` again to rebuild right away.
+
+**Check parameters:**
+
+```bash
+sudo wrong8007-params check
+```
+
+**Load now and on boot:**
+
+```bash
+sudo systemctl enable --now wrong8007
+```
+
+The service validates the parameters then loads the module with:
+
+```bash
+modprobe -C /etc/wrong8007/wrong8007.conf wrong8007
+```
+
+Order the service after the network when you use the [heartbeat](#heartbeat). Run `sudo systemctl edit wrong8007` and add:
+
+```ini
+[Unit]
+Wants=network-online.target
+After=network-online.target
+```
+
+Stop the service to unload the module:
+
+```bash
+sudo systemctl stop wrong8007
+```
+
+> [!IMPORTANT]
+> **Secure Boot:** Kernels requiring module signatures (including Debian, Ubuntu and Fedora) reject unsigned modules with `Key was rejected by service`.
+>
+> Debian and Ubuntu sign DKMS modules using a Machine Owner Key (MOK). Enroll the key once with `mokutil --import`, then reboot to complete enrollment.
+>
+> The default key locations are:
+> - Ubuntu: `/var/lib/shim-signed/mok/MOK.der`
+> - Debian: `/var/lib/dkms/mok.pub`
+
+### Uninstall
+
+```bash
+make dkms-uninstall
+```
+
+The parameter configuration is left in place.
+
 ### Unload and uninstall
 
 Unload the module:
@@ -235,7 +300,7 @@ Any IPv4 packet from that host counts. Run this on the host to send heartbeats o
 ```
 
 > [!NOTE]
-> The timeout starts counting at load. The trigger fires when no heartbeat arrives within `heartbeat_timeout` seconds of loading (for example during boot).
+> The timeout starts counting at load. The trigger fires when no heartbeat arrives within `heartbeat_timeout` seconds of loading (for example during boot). [Order the service after the network](#install-with-dkms) so the timeout starts once the network is up.
 
 > [!NOTE]
 > #### MAC and IP-only triggers
