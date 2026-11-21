@@ -87,3 +87,48 @@ jobs:
           KCONFIG_CONFIG=defaults.config alldefconfig Kconfig
           diff <(grep CONFIG_ defaults.config) <(grep CONFIG_ configs/defconfig)
 
+  dkms:
+    name: dkms
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: install dkms and headers
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y dkms "linux-headers-$(uname -r)"
+
+      - name: install through dkms
+        run: make dkms-install
+
+      - name: installed module and files
+        run: |
+          v=$(sed -n 's/^PACKAGE_VERSION="\(.*\)"$/\1/p' dkms.conf)
+          echo "v=$v" >> "$GITHUB_ENV"
+          dkms status "wrong8007/$v" | grep installed
+          test "$(modinfo -F version wrong8007)" = "$v"
+          test -f "/usr/src/wrong8007-$v/dkms.conf"
+          systemd-analyze verify /usr/local/lib/systemd/system/wrong8007.service
+          test "$(sudo stat -c %a /etc/wrong8007)" = 700
+
+      - name: parameters checked against the installed module
+        run: |
+          printf 'options wrong8007 exec=/usr/bin/true phrase="ci phrase"\n' > params.conf
+          sudo wrong8007-params check wrong8007 params.conf
+
+      - name: build profile in /etc/wrong8007
+        run: |
+          sed 's/^CONFIG_WRONG8007_NETWORK=y$/# CONFIG_WRONG8007_NETWORK is not set/' configs/defconfig |
+            sudo tee /etc/wrong8007/build.config >/dev/null
+          sudo dkms remove "wrong8007/$v" --all
+          sudo dkms install "wrong8007/$v"
+          if modinfo -F parm wrong8007 | grep -q '^match_port:'; then exit 1; fi
+          printf 'options wrong8007 exec=/usr/bin/true match_port=1234\n' > params.conf
+          if sudo wrong8007-params check wrong8007 params.conf; then exit 1; fi
+
+      - name: uninstall
+        run: |
+          make dkms-uninstall
+          if dkms status | grep -q wrong8007; then exit 1; fi
+          test ! -e "/usr/src/wrong8007-$v"
+          test ! -e /usr/local/bin/wrong8007-params
