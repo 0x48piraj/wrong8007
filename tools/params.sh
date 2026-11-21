@@ -3,15 +3,19 @@
 # wrong8007 parameter validation and local module loading.
 #
 # Usage:
-#   params.sh check CONFIG PARAMS
-#   params.sh insmod CONFIG PARAMS MODULE.ko
+#   params.sh check [BUILD [PARAMS]]
+#   params.sh insmod BUILD PARAMS MODULE.ko
 #
-# CONFIG is the build profile. PARAMS is the module options file.
+# BUILD = build profile, module file, or installed module name.
+#         Defaults to wrong8007.
+#
+# PARAMS = module options file.
+#          Defaults to /etc/wrong8007/wrong8007.conf.
 #
 # Validation mirrors the module's parameter parsing and rejects
 # parameters the kernel would otherwise silently ignore.
 #
-# Trigger phrases and payload contents are never printed.
+# Trigger phrases and payloads stay hidden. Never print them.
 
 set -eu
 
@@ -19,38 +23,39 @@ LC_ALL=C
 export LC_ALL
 
 MODE="${1:-}"
-CONFIG="${2:-}"
-PARAMS="${3:-}"
+CONFIG="${2:-wrong8007}"
+PARAMS="${3:-/etc/wrong8007/wrong8007.conf}"
 MODULE="${4:-}"
 
 usage() {
-    echo "usage: params.sh check CONFIG PARAMS"
-    echo "       params.sh insmod CONFIG PARAMS MODULE.ko"
+    echo "usage: params.sh check [BUILD [PARAMS]]"
+    echo "       params.sh insmod BUILD PARAMS MODULE.ko"
     exit 2
 }
 
 case "$MODE" in
-    check)
-        if [ -z "$CONFIG" ] || [ -z "$PARAMS" ]; then
-            usage
-        fi
-        ;;
+    check) ;;
     insmod)
-        if [ -z "$CONFIG" ] || [ -z "$PARAMS" ] || [ -z "$MODULE" ]; then
+        if [ "$#" -ne 4 ]; then
             usage
         fi
         ;;
     *) usage ;;
 esac
 
-[ -r "$CONFIG" ] || {
-    echo "error: build profile not found: $CONFIG (run 'make defconfig')"
-    exit 1
-}
+# Compiled-in triggers from a build profile or from the module's parameters
+parms=
+if [ ! -f "$CONFIG" ] || ! grep -q '^CONFIG_WRONG8007' "$CONFIG"; then
+    parms=$(modinfo -F parm "$CONFIG" 2>/dev/null | cut -d: -f1)
+    [ -n "$parms" ] || {
+        echo "error: no build profile or module: $CONFIG"
+        exit 1
+    }
+fi
 
 [ -r "$PARAMS" ] || {
     echo "error: parameter file not readable: $PARAMS"
-    echo "create it with 'make params-init', then edit it with sudoedit."
+    echo "copy wrong8007.conf.example to it with mode 0600, then edit it with sudoedit."
     exit 1
 }
 
@@ -73,7 +78,15 @@ get_bool() {
     fi
 }
 
-# Tokenize wrong8007 options, honoring quoted values and continuations
+has_parm() {
+    if printf '%s\n' "$parms" | grep -qx "$1"; then
+        echo y
+    else
+        echo n
+    fi
+}
+
+# Tokenize wrong8007 options honoring quoted values/continuations
 tokenize() {
     awk '
     {
@@ -102,7 +115,6 @@ tokenize() {
     ' "$PARAMS"
 }
 
-# Match the kernel's dotted-quad IPv4 parsing rules
 is_ipv4() {
     s="$1"
 
@@ -158,7 +170,7 @@ is_hex_u16() {
 is_usb_rule() {
     rule="$1"
 
-    # Match the kernel's 63-byte rule limit
+    # Kernel's 63-byte rule limit
     [ "${#rule}" -ge 64 ] && return 1
 
     vid=${rule%%:*}
@@ -210,9 +222,15 @@ check_usb() {
     [ "$count" -gt 0 ] || err "usb_devices is set but contains no rules"
 }
 
-kbd=$(get_bool WRONG8007_KEYBOARD)
-usb=$(get_bool WRONG8007_USB)
-net=$(get_bool WRONG8007_NETWORK)
+if [ -n "$parms" ]; then
+    kbd=$(has_parm phrase)
+    usb=$(has_parm usb_devices)
+    net=$(has_parm match_port)
+else
+    kbd=$(get_bool WRONG8007_KEYBOARD)
+    usb=$(get_bool WRONG8007_USB)
+    net=$(get_bool WRONG8007_NETWORK)
+fi
 
 tokens=$(tokenize) || {
     echo ""
@@ -327,7 +345,6 @@ if [ -n "$whitelist" ]; then
 fi
 
 if [ -n "$match_mac" ]; then
-    # Match the MAC formats accepted by lib/parse.c
     h2='[0-9a-fA-F][0-9a-fA-F]'
     # $h2 stays unquoted on purpose as a glob character class
     # shellcheck disable=SC2254
