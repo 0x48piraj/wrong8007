@@ -1,0 +1,36 @@
+# Maintainer: Piyush Raj <hello at piyushraj dot org>
+
+pkgbase=wrong8007
+pkgname=(wrong8007-dkms wrong8007-utils)
+pkgver=0.1.2
+pkgrel=1
+pkgdesc="A programmable kernel-resident dead man's switch for last-resort execution"
+arch=(x86_64 aarch64)
+url="https://github.com/0x48piraj/wrong8007"
+license=(GPL-2.0-only)
+makedepends=(dkms glibc kmod)
+source=("https://github.com/0x48piraj/wrong8007/releases/download/$pkgver/$pkgbase-$pkgver.tar.gz")
+sha256sums=('SKIP')
+
+build() {
+  cd "$pkgbase-$pkgver"
+  make -C tools
+}
+
+package_wrong8007-dkms() {
+  pkgdesc="DKMS module, parameter validation and systemd service for wrong8007"
+  arch=(any)
+  depends=(dkms kmod)
+  optdepends=('wrong8007-utils: wrong8007ctl with the heartbeat sender')
+
+  cd "$pkgbase-$pkgver"
+  make install-files DESTDIR="$pkgdir" PREFIX=/usr
+}
+
+package_wrong8007-utils() {
+  pkgdesc="Userspace control and heartbeat utilities for wrong8007"
+  depends=(glibc)
+
+  cd "$pkgbase-$pkgver"
+  make -C tools install DESTDIR="$pkgdir" PREFIX=/usr
+}

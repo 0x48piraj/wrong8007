@@ -92,6 +92,43 @@ jobs:
           KCONFIG_CONFIG=defaults.config "$RUNNER_TEMP/kconfiglib/bin/alldefconfig" Kconfig
           diff <(grep CONFIG_ defaults.config) <(grep CONFIG_ configs/defconfig)
 
+  arch:
+    name: arch package
+    runs-on: ubuntu-24.04
+    container: archlinux:base-devel@sha256:fa2d4ce3310ddd90a4208e5168be8ad367da5129af1245f38fd2d803bcbe3239
+    steps:
+      - name: install git and namcap
+        run: pacman -Syu --noconfirm --needed git namcap
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: build the packages
+        run: |
+          git config --global --add safe.directory "$PWD"
+          v=$(sed -n 's/^PACKAGE_VERSION="\(.*\)"$/\1/p' dkms.conf)
+          grep -qx "pkgver=$v" packaging/arch/PKGBUILD
+          git archive --format=tar --prefix="wrong8007-$v/" HEAD | gzip -9n > "packaging/arch/wrong8007-$v.tar.gz"
+          useradd -m builder
+          chown -R builder packaging/arch
+          su builder -c 'cd packaging/arch && makepkg --skipchecksums --nodeps'
+
+      - name: namcap
+        run: |
+          cd packaging/arch
+          namcap PKGBUILD $(ls ./*.pkg.tar.zst | grep -v -- '-debug-') | tee namcap.log
+          if grep -q ' E: ' namcap.log; then exit 1; fi
+
+      - name: install the packages
+        run: |
+          mkdir -p /usr/lib/modules
+          pacman -U --noconfirm packaging/arch/*.pkg.tar.zst
+          v=$(sed -n 's/^PACKAGE_VERSION="\(.*\)"$/\1/p' dkms.conf)
+          test -f "/usr/src/wrong8007-$v/dkms.conf"
+          test -f /usr/lib/systemd/system/wrong8007.service
+          test -x /usr/bin/wrong8007-params
+          test "$(stat -c %a /etc/wrong8007)" = 700
+          wrong8007ctl --help
+
   dkms:
     name: dkms
     runs-on: ubuntu-24.04

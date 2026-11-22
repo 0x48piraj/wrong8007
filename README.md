@@ -110,6 +110,10 @@ It runs `modprobe -C /etc/wrong8007/wrong8007.conf wrong8007`. A plain `modprobe
 
 `make load` loads the module you just built without installing it. It's meant for development. It passes the parameters on the `insmod` command line where other users can briefly see them in the process list.
 
+### Arch Linux
+
+Install `wrong8007-dkms` from the [AUR](https://aur.archlinux.org/pkgbase/wrong8007) with your AUR helper.
+
 ### Install with DKMS
 
 DKMS rebuilds the module whenever you install a new kernel.
