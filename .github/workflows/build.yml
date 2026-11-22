@@ -20,6 +20,7 @@ jobs:
           - { kernel: "6.1.134",  runner: ubuntu-24.04 }
           - { kernel: "6.6.87",   runner: ubuntu-24.04 }
           - { kernel: "6.12.23",  runner: ubuntu-24.04 }
+          - { kernel: "6.18.64",  runner: ubuntu-24.04 }
           - { kernel: "7.2.11",   runner: ubuntu-24.04 }
     steps:
       - uses: actions/checkout@v4
