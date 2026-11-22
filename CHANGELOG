@@ -2,6 +2,30 @@
 
 Notable changes to Wrong Boot (wrong8007).
 
+## 0.1.2 (2026-11-22)
+
+This release packages Wrong Boot for Arch Linux and publishes a release tarball with build provenance. DKMS installs no longer print warnings on current dkms.
+
+### Packaging
+
+* Arch Linux packages `wrong8007-dkms` and `wrong8007-utils` in the AUR
+* Release tarball with SLSA build provenance and a SHA-256 checksum
+* `dkms.conf` without the `CLEAN` directive that dkms 3.4 flags as deprecated
+* No ignored error from a first `make dkms-install`
+* `wrong8007ctl` built with the distribution's compiler and linker flags
+
+### Project
+
+* Security policy with private vulnerability reporting
+* Contributor guide and a current pull request template
+
+### Tooling
+
+* CI builds against Linux 6.18
+* CI builds the Arch packages and checks them with namcap
+* GitHub Actions pinned by commit hash with a read-only token
+* Dependabot updates for GitHub Actions
+
 ## 0.1.1 (2026-11-22)
 
 This release installs Wrong Boot through DKMS and builds the module without the kernel's Kconfig tools. DKMS rebuilds the module for every kernel you install and a systemd unit arms it at boot.
