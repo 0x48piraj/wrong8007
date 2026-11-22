@@ -1,5 +1,6 @@
 CC       ?= cc
-CFLAGS   ?= -std=c11 -Wall -Wextra -Wformat=2 -Wpedantic -pedantic -O2
+CFLAGS   ?= -O2
+WARNINGS := -std=c11 -Wall -Wextra -Wformat=2 -Wpedantic
 PREFIX   ?= /usr/local
 BINDIR   := $(PREFIX)/bin
 
@@ -10,7 +11,7 @@ TARGET := wrong8007ctl
 all: $(TARGET)
 
 $(TARGET): $(TARGET).c
-	$(CC) $(CFLAGS) -o $@ $<
+	$(CC) $(WARNINGS) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) -o $@ $<
 
 install: $(TARGET)
 	install -Dm755 $(TARGET) $(DESTDIR)$(BINDIR)/$(TARGET)
