@@ -15,6 +15,14 @@ Include what you can:
 
 You get a reply within seven days. The fix ships in a release with an advisory that credits you. Say so in the report if you would rather stay anonymous.
 
+## Verifying a release
+
+Each release tarball carries signed build provenance from GitHub Actions. Check it with the GitHub CLI:
+
+```bash
+gh attestation verify wrong8007-<version>.tar.gz --repo 0x48piraj/wrong8007
+```
+
 ## Supported versions
 
 Fixes land on `master` and ship in the next release. Only the latest release receives them.
