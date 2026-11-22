@@ -112,7 +112,12 @@ It runs `modprobe -C /etc/wrong8007/wrong8007.conf wrong8007`. A plain `modprobe
 
 ### Arch Linux
 
-Install `wrong8007-dkms` from the [AUR](https://aur.archlinux.org/pkgbase/wrong8007) with your AUR helper.
+Build and install the packages from the PKGBUILD in this repository. pacman then builds the module for every installed kernel that has its headers:
+
+```bash
+cd packaging/arch
+makepkg -si
+```
 
 ### Install with DKMS
 

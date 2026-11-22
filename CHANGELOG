@@ -8,7 +8,7 @@ This release packages Wrong Boot for Arch Linux and publishes a release tarball 
 
 ### Packaging
 
-* Arch Linux packages `wrong8007-dkms` and `wrong8007-utils` in the AUR
+* Arch Linux packages `wrong8007-dkms` and `wrong8007-utils` built from `packaging/arch/PKGBUILD`
 * Release tarball with SLSA build provenance and a SHA-256 checksum
 * `dkms.conf` without the `CLEAN` directive that dkms 3.4 flags as deprecated
 * No ignored error from a first `make dkms-install`
