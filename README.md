@@ -2,7 +2,7 @@
 
 **Wrong Boot** (*codename: `wrong8007`*) is a **programmable dead man's switch** for Linux, triggered by events observed inside the kernel.
 
-Inspired by the [USBKill](https://github.com/hephaest0s/usbkill) project from 2016, Wrong Boot rethinks the idea as a modular Linux kernel module. Triggers are independent of execution, allowing the same core to support different activation mechanisms while leaving payloads entirely user-defined.
+Inspired by the [USBKill](https://github.com/hephaest0s/usbkill) project from 2015, Wrong Boot rethinks the idea as a modular Linux kernel module. Triggers are independent of execution, allowing the same core to support different activation mechanisms while leaving payloads entirely user-defined.
 
 This project was revisited and expanded in memory of **[Mark Klein](https://en.wikipedia.org/wiki/Mark_Klein)** (May 2, 1945 - March 8, 2025), the AT&T technician who, in 2006, revealed the existence of warrantless mass surveillance (Secrets of [Room 641A](https://en.wikipedia.org/wiki/Room_641A)) by the NSA.
 
