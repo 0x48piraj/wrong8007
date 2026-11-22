@@ -1,69 +1,57 @@
-# Pull Request
-
 ## Summary
-<!-- Provide a brief description of what this PR accomplishes -->
-Example: Add heartbeat-based network trigger, upgrade USB whitelist management
 
-## Changes Made
-<!-- List the main changes in this PR -->
-- Added support for heartbeat-based network trigger
-- Refactored USB trigger parameter parsing
-- Updated Makefile to support new trigger options
-- Minor code cleanup in core module
+<!-- What this pull request changes for users, in one or two sentences. -->
 
-## Type of Change
-<!-- Mark the relevant option with an "x" -->
-- [ ] Bug fix (non-breaking change which fixes an issue)
-- [ ] New feature (non-breaking change which adds functionality)
-- [ ] Breaking change (changes module behavior in existing triggers)
+## Type of change
+
+- [ ] Bug fix
+- [ ] New trigger or feature
+- [ ] Breaking change (parameters, build profile or behavior of an existing trigger)
 - [ ] Documentation
-- [ ] Performance
-- [ ] Code refactoring
+- [ ] Refactoring or cleanup
 
-## Kernel Versions Tested
-<!-- List kernel versions this PR has been tested on -->
-Example: 5.4.236, 6.1.47, 6.6.14
+## Affected triggers
 
-## Affected Triggers
-<!-- Mark all triggers affected by this PR -->
-- [ ] Keyboard Trigger
-- [ ] USB Trigger
-- [ ] Network Trigger
-- [ ] Other / Custom
+- [ ] Keyboard
+- [ ] USB
+- [ ] Network
+- [ ] New trigger
+- [ ] Core or tooling only
+
+## Kernel versions tested
+
+<!-- For example: 6.12.23, 7.2.11 -->
 
 ## Testing
-<!-- Describe how you tested your changes -->
-- [ ] Load/unload module with new trigger(s)
-- [ ] Verified `/tmp/trigger_test.log` logs correct execution
-- [ ] Ran `make test` / runtime smoke tests
-- [ ] Nightly CI builds passed
+
+- [ ] Every build profile this change touches builds without warnings (`make PROFILE=<file>`)
+- [ ] The module loads with the change (`make load PARAMS=<file>`) and unloads cleanly (`make remove`)
+- [ ] The trigger fires on the condition it should and stays quiet on the ones it shouldn't
+- [ ] `dmesg` shows no new warnings and no trigger values
+- [ ] CI passes
 
 ### Evidence
-<!-- Provide commands run and results -->
-```bash
-# Example: sudo insmod wrong8007.ko PHRASE="nuke" EXEC="/tmp/trigger_test.sh"
-# Example: sudo rmmod wrong8007
-# Example: sudo dmesg | tail -20
-```
+
+<!--
+The commands you ran and what they printed. Leave out real phrases, USB rules and addresses. For example:
+
+make PROFILE=configs/defconfig
+make load PARAMS=test.conf
+sudo dmesg | tail -20
+make remove
+-->
 
 ## Checklist
 
-<!-- Mark completed items with an "x" -->
+- [ ] Code matches the existing style (kernel conventions, 4-space indentation)
+- [ ] New parameters are validated in `init()` and checked by `wrong8007-params`
+- [ ] README and `configs/wrong8007.conf.example` cover new or changed parameters
+- [ ] No trigger values or payload path in the kernel log
 
-* [ ] The code follows Linux kernel coding style
-* [ ] All new and existing tests pass locally
-* [ ] The proposed changes generate no new warnings in `dmesg`
-* [ ] Documentation for new or changed triggers
-* [ ] No regressions in existing trigger functionality
+## Breaking changes
 
-## Breaking
-
-<!-- If this PR introduces breaking changes, describe them here -->
-
-<!-- Include migration steps if applicable -->
+<!-- What breaks and how users migrate. Delete this section if nothing breaks. -->
 
 ## Notes
 
-<!-- Any additional information reviewers should know -->
-
-<!-- Include screenshots, performance metrics, dependencies, etc. -->
+<!-- Anything else a reviewer should know. -->

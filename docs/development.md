@@ -462,7 +462,7 @@ A trigger should be tested both for the condition that activates it and for the 
 
 ## Code style
 
-Follow Linux kernel coding conventions.
+Match the existing code. It follows Linux kernel coding conventions with 4-space indentation instead of tabs.
 
 Prefer:
 
