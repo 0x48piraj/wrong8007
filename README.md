@@ -119,6 +119,16 @@ cd packaging/arch
 makepkg -si
 ```
 
+### Debian and Ubuntu
+
+Download `wrong8007-dkms` and `wrong8007-utils` from the [latest release](https://github.com/0x48piraj/wrong8007/releases/latest), then install them with the headers of your running kernel:
+
+```bash
+sudo apt install linux-headers-$(uname -r) ./wrong8007-dkms_*_all.deb ./wrong8007-utils_*.deb
+```
+
+DKMS builds the module now and again for every kernel you install later. The packages work on Debian 12 and Ubuntu 22.04 or newer.
+
 ### Install with DKMS
 
 DKMS rebuilds the module whenever you install a new kernel.

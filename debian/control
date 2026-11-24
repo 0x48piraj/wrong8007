@@ -1,0 +1,30 @@
+Source: wrong8007
+Section: kernel
+Priority: optional
+Maintainer: Piyush Raj <hello@piyushraj.org>
+Build-Depends: debhelper-compat (= 13), dh-sequence-dkms
+Standards-Version: 4.7.0
+Homepage: https://github.com/0x48piraj/wrong8007
+Vcs-Browser: https://github.com/0x48piraj/wrong8007
+Vcs-Git: https://github.com/0x48piraj/wrong8007.git
+Rules-Requires-Root: no
+
+Package: wrong8007-dkms
+Architecture: all
+Depends: kmod, ${misc:Depends}
+Suggests: wrong8007-utils
+Description: programmable kernel-resident dead man's switch for last-resort execution
+ Wrong Boot carries out a decision you made in advance by following the
+ instructions you left the moment the kernel sees a condition you define.
+ Keyboard, USB and network triggers come built in and new triggers plug
+ into the same core.
+ .
+ This package provides the module source for DKMS, the wrong8007-params
+ parameter check and the wrong8007 systemd service.
+
+Package: wrong8007-utils
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: userspace control and heartbeat utilities for wrong8007
+ This package provides wrong8007ctl. It sends heartbeats and test traffic
+ to a machine running Wrong Boot.

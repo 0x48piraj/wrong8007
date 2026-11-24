@@ -1,0 +1,28 @@
+#!/usr/bin/make -f
+
+export DEB_BUILD_MAINT_OPTIONS = hardening=+all
+
+%:
+	dh $@
+
+override_dh_auto_build:
+	$(MAKE) -C tools
+
+override_dh_auto_test:
+
+override_dh_auto_install:
+	$(MAKE) install-files DESTDIR=$(CURDIR)/debian/wrong8007-dkms PREFIX=/usr
+	$(MAKE) -C tools install DESTDIR=$(CURDIR)/debian/wrong8007-utils PREFIX=/usr
+
+override_dh_auto_clean:
+	$(MAKE) -C tools clean
+
+override_dh_dkms:
+	dh_dkms -p wrong8007-dkms -- dkms.conf
+
+override_dh_installsystemd:
+	dh_installsystemd --no-enable --no-start
+
+override_dh_fixperms:
+	dh_fixperms
+	chmod 0700 debian/wrong8007-dkms/etc/wrong8007

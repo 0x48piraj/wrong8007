@@ -132,6 +132,43 @@ jobs:
           test "$(stat -c %a /etc/wrong8007)" = 700
           wrong8007ctl --help
 
+  debian:
+    name: debian package
+    runs-on: ubuntu-24.04
+    container: debian:bookworm@sha256:268fb24c39bca92d326dd83ea3abebe4a3f7751c804ffef23bb6d857dd343ff8
+    steps:
+      - name: install build tools
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends build-essential debhelper dh-dkms lintian
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: build the packages
+        run: |
+          v=$(sed -n 's/^PACKAGE_VERSION="\(.*\)"$/\1/p' dkms.conf)
+          test "$(dpkg-parsechangelog -S Version | sed 's/-[^-]*$//')" = "$v"
+          dpkg-buildpackage -us -uc -b
+
+      - name: lintian
+        run: lintian --fail-on error ../*.changes
+
+      - name: install the packages
+        run: |
+          apt-get install -y --no-install-recommends linux-headers-amd64 linux-headers-cloud-amd64
+          apt-get install -y --no-install-recommends ../wrong8007-*.deb
+          v=$(sed -n 's/^PACKAGE_VERSION="\(.*\)"$/\1/p' dkms.conf)
+          for k in $(ls /lib/modules); do dkms autoinstall -k "$k"; done
+          test "$(dkms status "wrong8007/$v" | grep -c installed)" = 2
+          ka=$(ls -d /lib/modules/* | grep -v cloud)
+          kc=$(ls -d /lib/modules/* | grep cloud)
+          modinfo -F parm "$ka"/updates/dkms/wrong8007.ko* | grep -q '^usb_devices:'
+          if modinfo -F parm "$kc"/updates/dkms/wrong8007.ko* | grep -q '^usb_devices:'; then exit 1; fi
+          test -f "/usr/src/wrong8007-$v/dkms.conf"
+          test -x /usr/bin/wrong8007-params
+          test "$(stat -c %a /etc/wrong8007)" = 700
+          wrong8007ctl --help
+
   dkms:
     name: dkms
     runs-on: ubuntu-24.04

@@ -9,7 +9,7 @@ permissions:
 
 jobs:
   release:
-    name: source tarball
+    name: release files
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -18,28 +18,44 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: tarball, checksum and notes
+      - name: tarball and notes
         run: |
           v=$GITHUB_REF_NAME
           test "$(sed -n 's/^PACKAGE_VERSION="\(.*\)"$/\1/p' dkms.conf)" = "$v"
-          t=wrong8007-$v.tar.gz
-          git archive --format=tar --prefix="wrong8007-$v/" HEAD | gzip -9n > "$t"
-          sha256sum "$t" > SHA256SUMS
+          git archive --format=tar --prefix="wrong8007-$v/" HEAD | gzip -9n > "wrong8007-$v.tar.gz"
           awk -v h="## $v " 'index($0, h) == 1 { f = 1; next } /^## / { f = 0 } f' CHANGELOG > notes.md
           grep -q . notes.md
+
+      - name: Debian packages
+        run: |
+          mkdir dist
+          docker run --rm -e "v=$GITHUB_REF_NAME" -v "$PWD:/src:ro" -v "$PWD/dist:/out" \
+            debian:bookworm@sha256:268fb24c39bca92d326dd83ea3abebe4a3f7751c804ffef23bb6d857dd343ff8 sh -ec '
+              apt-get update
+              apt-get install -y --no-install-recommends build-essential debhelper dh-dkms
+              mkdir /build
+              cp -r /src /build/wrong8007
+              cd /build/wrong8007
+              test "$(dpkg-parsechangelog -S Version | sed "s/-[^-]*\$//")" = "$v"
+              dpkg-buildpackage -us -uc -b
+              cp /build/*.deb /out/'
+          cp dist/*.deb .
+          sha256sum "wrong8007-$GITHUB_REF_NAME.tar.gz" wrong8007-*_*.deb > SHA256SUMS
 
       - name: build provenance
         id: provenance
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
-          subject-path: wrong8007-${{ github.ref_name }}.tar.gz
+          subject-path: |
+            wrong8007-${{ github.ref_name }}.tar.gz
+            wrong8007-*_*.deb
 
       - name: GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
           BUNDLE: ${{ steps.provenance.outputs.bundle-path }}
         run: |
-          t=wrong8007-$GITHUB_REF_NAME.tar.gz
-          cp "$BUNDLE" "$t.sigstore.json"
+          cp "$BUNDLE" "wrong8007-$GITHUB_REF_NAME.sigstore.json"
           gh release create "$GITHUB_REF_NAME" --verify-tag --title "v$GITHUB_REF_NAME" \
-            --notes-file notes.md "$t" "$t.sigstore.json" SHA256SUMS
+            --notes-file notes.md "wrong8007-$GITHUB_REF_NAME.tar.gz" wrong8007-*_*.deb \
+            "wrong8007-$GITHUB_REF_NAME.sigstore.json" SHA256SUMS
