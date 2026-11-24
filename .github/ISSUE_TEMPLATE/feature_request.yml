@@ -1,5 +1,5 @@
-name: Feature Request
-description: Suggest a new trigger or improvement for wrong8007 kernel module
+name: Feature request
+description: Suggest a new trigger or an improvement to Wrong Boot
 title: "[Feature]: "
 labels: ["feature"]
 assignees: []
@@ -8,55 +8,40 @@ body:
   - type: markdown
     attributes:
       value: |
-        # Feature Request for wrong8007 Kernel Module
-        Thank you for suggesting upgrades! Please provide as much detail as possible.
+        Thanks for the idea. The [design philosophy](https://github.com/0x48piraj/wrong8007/blob/master/docs/manifesto.md) and the [security model](https://github.com/0x48piraj/wrong8007/blob/master/docs/security-model.md) say what Wrong Boot sets out to do and what it leaves out.
 
-  - type: input
-    id: feature-name
+  - type: textarea
+    id: summary
     attributes:
-      label: Name
-      description: Short title for the requested feature or trigger
-      placeholder: "Heartbeat-based network trigger"
+      label: Summary
+      description: What the feature changes for users, in one or two sentences.
+      placeholder: A trigger that runs the payload when the machine switches to battery power.
     validations:
       required: true
 
-  - type: textarea
-    id: description
+  - type: checkboxes
+    id: triggers
     attributes:
-      label: Description
-      description: Describe the feature and what it should do
-      placeholder: "The module should trigger a script if a host stops sending packets for a certain interval."
-
-  - type: textarea
-    id: use-case
-    attributes:
-      label: Usecase
-      description: Explain why this feature is useful
-      placeholder: "Useful for monitoring hosts or remote kill-switch functionality."
-
-  - type: dropdown
-    id: trigger-type
-    attributes:
-      label: Trigger Type
-      description: Which type of trigger does this feature relate to?
+      label: Affected triggers
       options:
-        - "Keyboard"
-        - "USB"
-        - "Network"
-        - "Other / Custom"
+        - label: Keyboard
+        - label: USB
+        - label: Network
+        - label: New trigger
+        - label: Core or tooling only
+
+  - type: textarea
+    id: why
+    attributes:
+      label: Why
+      description: Situation where you need it and what you do without it today.
+      placeholder: A laptop pulled off its charger often means someone is carrying it away.
     validations:
       required: true
 
   - type: textarea
-    id: implementation-notes
+    id: notes
     attributes:
-      label: Implementation Notes
-      description: Optional suggestions for how the feature might be implemented
-      placeholder: "Might add support in trigger list, follow existing load parameter patterns."
-
-  - type: textarea
-    id: additional-context
-    attributes:
-      label: Additional Context
-      description: Any other context or references
-      placeholder: "Link to RFC, Linux kernel documentation, or similar modules."
+      label: Notes
+      description: Ideas for the implementation, kernel documentation or similar projects.
+      placeholder: The kernel's power_supply notifier reports changes on the AC adapter.

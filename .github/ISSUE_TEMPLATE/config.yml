@@ -1,0 +1,4 @@
+contact_links:
+  - name: Report a vulnerability
+    url: https://github.com/0x48piraj/wrong8007/security/advisories/new
+    about: Report it privately. Don't open a public issue for it.

@@ -1,5 +1,5 @@
-name: Bug Report
-description: Report a bug to help improve the wrong8007 kernel module
+name: Bug report
+description: Report a bug in Wrong Boot
 title: "[Bug]: "
 labels: ["bug"]
 assignees: []
@@ -8,84 +8,112 @@ body:
   - type: markdown
     attributes:
       value: |
-        # Bug Report for wrong8007 Kernel Module
-        Thank you for reporting a bug! This helps us improve the module for all supported kernels.
+        Thanks for reporting a bug. Leave out real phrases, USB rules and addresses everywhere in this form.
+
+        Report a vulnerability [privately](https://github.com/0x48piraj/wrong8007/security/advisories/new) instead. The [security policy](https://github.com/0x48piraj/wrong8007/blob/master/SECURITY.md) says what counts as one.
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What went wrong, in one or two sentences.
+      placeholder: The keyboard trigger stops firing after the machine resumes from suspend.
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: triggers
+    attributes:
+      label: Affected triggers
+      options:
+        - label: Keyboard
+        - label: USB
+        - label: Network
+        - label: Core or tooling only
 
   - type: input
-    id: kernel-version
+    id: version
     attributes:
-      label: Kernel Version
-      description: Which kernel version are you running wrong8007 on?
-      placeholder: "6.6.14"
+      label: Wrong Boot version
+      description: Release or commit. `modinfo -F version wrong8007` prints the installed release.
+      placeholder: 0.1.2
+    validations:
+      required: true
+
+  - type: input
+    id: kernel
+    attributes:
+      label: Kernel version
+      description: Output of `uname -r`.
+      placeholder: 6.12.23
+    validations:
+      required: true
+
+  - type: input
+    id: distribution
+    attributes:
+      label: Distribution
+      placeholder: Debian 13
     validations:
       required: true
 
   - type: dropdown
-    id: severity
+    id: installation
     attributes:
-      label: Bug Severity
-      description: How severe is this bug?
+      label: Installation
       options:
-        - "Low - Minor inconvenience"
-        - "Medium - Affects trigger behavior"
-        - "High - Blocks module functionality"
-        - "Critical - Module unusable or kernel crash"
+        - Arch package (makepkg in packaging/arch)
+        - Debian or Ubuntu package
+        - NixOS module
+        - DKMS from source (make dkms-install)
+        - From source (make install)
+        - Development load (make load)
     validations:
       required: true
 
   - type: textarea
-    id: description
+    id: profile
     attributes:
-      label: Bug Description
-      description: What were you trying to do when this bug occurred?
-      placeholder: "I tried to trigger the keyboard phrase 'nuke' and nothing happened."
-    validations:
-      required: true
+      label: Build profile
+      description: "`CONFIG_WRONG8007_*` lines of `.config` or `/etc/wrong8007/build.config`. NixOS users give `services.wrong8007.triggers` instead. Leave it empty when every trigger is built."
+      render: text
+
+  - type: input
+    id: parameters
+    attributes:
+      label: Parameters
+      description: Names of the parameters you set, without their values.
+      placeholder: exec, phrase, usb_devices
 
   - type: textarea
-    id: steps-to-reproduce
+    id: steps
     attributes:
-      label: Steps to Reproduce
-      description: Detailed steps to reproduce the bug
+      label: Steps to reproduce
+      description: Commands and actions from a fresh boot. Put placeholders in place of trigger values.
       placeholder: |
-        1. Load the module with `make load PHRASE="nuke" EXEC="/tmp/trigger_test.log"`
-        2. Type the phrase 'nuke'
-        3. Observe that the trigger does not execute
+        1. sudo systemctl start wrong8007
+        2. Suspend and resume the machine
+        3. Type the phrase
     validations:
       required: true
 
   - type: textarea
-    id: expected-behavior
+    id: expected
     attributes:
-      label: Expected Behavior
-      description: What should have happened?
-      placeholder: "The trigger script should have executed and logged the event to /tmp/trigger_test.log"
+      label: Expected behavior
+      placeholder: The payload starts once the phrase is typed.
     validations:
       required: true
 
   - type: textarea
-    id: actual-behavior
+    id: log
     attributes:
-      label: Actual Behavior
-      description: What actually happened?
-      placeholder: "Nothing happened, or dmesg shows an error."
-    validations:
-      required: true
+      label: Kernel log
+      description: Output of `sudo dmesg | grep wrong8007` from the boot with the bug. Add `journalctl -b -u wrong8007` when the service loads the module. A trigger value in the log is a vulnerability; report it privately.
+      render: text
 
   - type: textarea
-    id: logs
+    id: notes
     attributes:
-      label: Logs / dmesg output
-      description: Copy any kernel logs or errors
-      placeholder: |
-        [ 1234.567890] wrong8007: Trigger failed for keyboard phrase 'nuke'
-
-  - type: checkboxes
-    id: triggers-used
-    attributes:
-      label: Active Triggers
-      description: Which triggers were loaded when the bug occurred?
-      options:
-        - label: "Keyboard Trigger"
-        - label: "USB Trigger"
-        - label: "Network Trigger"
+      label: Notes
+      description: Anything else a maintainer should know.
