@@ -199,13 +199,7 @@ sudo systemctl stop wrong8007
 ```
 
 > [!IMPORTANT]
-> **Secure Boot:** Kernels requiring module signatures (including Debian, Ubuntu and Fedora) reject unsigned modules with `Key was rejected by service`.
->
-> Debian and Ubuntu sign DKMS modules using a Machine Owner Key (MOK). Enroll the key once with `mokutil --import`, then reboot to complete enrollment.
->
-> The default key locations are:
-> - Ubuntu: `/var/lib/shim-signed/mok/MOK.der`
-> - Debian: `/var/lib/dkms/mok.pub`
+> **Secure Boot:** Debian, Ubuntu and Fedora load the module only after you enroll the DKMS signing key once. [Secure Boot](docs/secure-boot.md) shows how.
 
 ### Uninstall
 
