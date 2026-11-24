@@ -1,5 +1,5 @@
 [Unit]
-Description=A programmable kernel-resident dead man's switch for last-resort execution.
+Description=Wrong Boot dead man's switch
 Documentation=https://raj.foundation/wrong8007/
 
 [Service]

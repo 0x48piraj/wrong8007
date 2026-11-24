@@ -129,6 +129,27 @@ sudo apt install linux-headers-$(uname -r) ./wrong8007-dkms_*_all.deb ./wrong800
 
 DKMS builds the module now and again for every kernel you install later. The packages work on Debian 12 and Ubuntu 22.04 or newer.
 
+### NixOS
+
+Add the flake to your system configuration and enable the service:
+
+```nix
+{
+  inputs.wrong8007.url = "github:0x48piraj/wrong8007";
+
+  outputs = { nixpkgs, wrong8007, ... }: {
+    nixosConfigurations.host = nixpkgs.lib.nixosSystem {
+      modules = [
+        wrong8007.nixosModules.default
+        { services.wrong8007.enable = true; }
+      ];
+    };
+  };
+}
+```
+
+`services.wrong8007.triggers` selects the compiled-in triggers and `services.wrong8007.afterNetwork` orders the service after the network for the heartbeat. Write the parameter file yourself or with a secrets manager. It must stay out of the Nix store. Reboot after the first rebuild.
+
 ### Install with DKMS
 
 DKMS rebuilds the module whenever you install a new kernel.
