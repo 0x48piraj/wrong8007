@@ -112,6 +112,9 @@ jobs:
           chown -R builder packaging/arch
           su builder -c 'cd packaging/arch && makepkg --skipchecksums --nodeps'
 
+      - name: .SRCINFO matches the PKGBUILD
+        run: su builder -c 'cd packaging/arch && makepkg --printsrcinfo' | diff -u packaging/arch/.SRCINFO -
+
       - name: namcap
         run: |
           cd packaging/arch

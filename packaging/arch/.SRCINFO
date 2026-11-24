@@ -1,0 +1,24 @@
+pkgbase = wrong8007
+	pkgdesc = A programmable kernel-resident dead man's switch for last-resort execution
+	pkgver = 0.1.2
+	pkgrel = 1
+	url = https://github.com/0x48piraj/wrong8007
+	arch = x86_64
+	arch = aarch64
+	license = GPL-2.0-only
+	makedepends = dkms
+	makedepends = glibc
+	makedepends = kmod
+	source = https://github.com/0x48piraj/wrong8007/releases/download/0.1.2/wrong8007-0.1.2.tar.gz
+	sha256sums = 3b2a14b82be502593c951556c163a69c7230b1ac78bc4be89e6eb0da7aef8452
+
+pkgname = wrong8007-dkms
+	pkgdesc = DKMS module, parameter validation and systemd service for wrong8007
+	arch = any
+	depends = dkms
+	depends = kmod
+	optdepends = wrong8007-utils: wrong8007ctl with the heartbeat sender
+
+pkgname = wrong8007-utils
+	pkgdesc = Userspace control and heartbeat utilities for wrong8007
+	depends = glibc
