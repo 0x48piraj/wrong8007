@@ -23,6 +23,8 @@ Each release tarball carries signed build provenance from GitHub Actions. Check 
 gh attestation verify wrong8007-<version>.tar.gz --repo 0x48piraj/wrong8007
 ```
 
+The same signed provenance comes as `wrong8007-<version>.intoto.jsonl`, an in-toto attestation bundle that other verification tools read.
+
 ## Supported versions
 
 Fixes land on `master` and ship in the next release. Only the latest release receives them.

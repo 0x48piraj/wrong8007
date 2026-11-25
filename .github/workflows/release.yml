@@ -56,6 +56,8 @@ jobs:
           BUNDLE: ${{ steps.provenance.outputs.bundle-path }}
         run: |
           cp "$BUNDLE" "wrong8007-$GITHUB_REF_NAME.sigstore.json"
+          jq -c .dsseEnvelope "$BUNDLE" > "wrong8007-$GITHUB_REF_NAME.intoto.jsonl"
           gh release create "$GITHUB_REF_NAME" --verify-tag --title "v$GITHUB_REF_NAME" \
             --notes-file notes.md "wrong8007-$GITHUB_REF_NAME.tar.gz" wrong8007-*_*.deb \
-            "wrong8007-$GITHUB_REF_NAME.sigstore.json" SHA256SUMS
+            "wrong8007-$GITHUB_REF_NAME.sigstore.json" "wrong8007-$GITHUB_REF_NAME.intoto.jsonl" \
+            SHA256SUMS
