@@ -2,6 +2,31 @@
 
 Notable changes to Wrong Boot (wrong8007).
 
+## 0.1.3 (2026-11-25)
+
+This release packages Wrong Boot for Debian, Ubuntu and NixOS and adds a Secure Boot guide. The module now builds on kernels that lack a trigger's subsystem and leaves that trigger out.
+
+### Packaging
+
+* Debian and Ubuntu packages `wrong8007-dkms` and `wrong8007-utils` attached to the release with build provenance
+* Nix flake with the module, the utilities and a NixOS module (`services.wrong8007`)
+* `.SRCINFO` for the Arch Linux packages
+
+### Fixes
+
+* Failed DKMS build that left a new kernel without USB support unconfigured (Debian's cloud kernel)
+
+### Project
+
+* Secure Boot guide for enrolling the DKMS signing key
+* Issue templates that match the pull request template and a link to private vulnerability reporting
+
+### Tooling
+
+* CI builds the Debian packages, checks them with lintian and installs them
+* CI runs the NixOS VM test and checks Nix formatting
+* CI checks `.SRCINFO` against the PKGBUILD
+
 ## 0.1.2 (2026-11-22)
 
 This release packages Wrong Boot for Arch Linux and publishes a release tarball with build provenance. DKMS installs no longer print warnings on current dkms.

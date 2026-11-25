@@ -2,7 +2,7 @@
 
 pkgbase=wrong8007
 pkgname=(wrong8007-dkms wrong8007-utils)
-pkgver=0.1.2
+pkgver=0.1.3
 pkgrel=1
 pkgdesc="A programmable kernel-resident dead man's switch for last-resort execution"
 arch=(x86_64 aarch64)
@@ -10,7 +10,7 @@ url="https://github.com/0x48piraj/wrong8007"
 license=(GPL-2.0-only)
 makedepends=(dkms glibc kmod)
 source=("https://github.com/0x48piraj/wrong8007/releases/download/$pkgver/$pkgbase-$pkgver.tar.gz")
-sha256sums=('3b2a14b82be502593c951556c163a69c7230b1ac78bc4be89e6eb0da7aef8452')
+sha256sums=('SKIP')
 
 build() {
   cd "$pkgbase-$pkgver"
