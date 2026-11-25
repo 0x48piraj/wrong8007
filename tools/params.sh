@@ -181,6 +181,7 @@ is_usb_rule() {
         *:*)
             pid=${rest%%:*}
             ev=${rest#*:}
+            [ -n "$ev" ] || return 1
             ;;
         *)
             pid=$rest
