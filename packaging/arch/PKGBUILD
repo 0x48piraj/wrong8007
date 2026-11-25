@@ -10,7 +10,7 @@ url="https://github.com/0x48piraj/wrong8007"
 license=(GPL-2.0-only)
 makedepends=(dkms glibc kmod)
 source=("https://github.com/0x48piraj/wrong8007/releases/download/$pkgver/$pkgbase-$pkgver.tar.gz")
-sha256sums=('SKIP')
+sha256sums=('cab0b83fd81ba727de37c5b5a29787c1bdcacc53e2e038f8a1f0e96e77e4b0d8')
 
 build() {
   cd "$pkgbase-$pkgver"
