@@ -117,6 +117,8 @@ A trigger's `exit()` function should:
 3. Free trigger-owned memory.
 4. Leave no active callback pointing at module-owned state.
 
+Notifier chains, input handlers and bus notifiers wait for callbacks in progress when they unregister. `nf_unregister_net_hook()` does not; a trigger with a Netfilter hook calls `synchronize_net()` after it.
+
 `exit()` must be safe for the lifecycle state actually reached by `init()`.
 
 ## Activation and one-shot execution
@@ -298,10 +300,11 @@ The trigger framework is therefore **not strictly stateless**. The important arc
 
 During module removal, the core:
 
-1. Calls each trigger's `exit()` function.
-2. Unregisters trigger hooks and stops asynchronous trigger activity.
-3. Cancels pending execution work and destroys its workqueue.
-4. Frees core-owned memory.
+1. Disarms activation.
+2. Calls each trigger's `exit()` function.
+3. Unregisters trigger hooks and stops asynchronous trigger activity.
+4. Cancels pending execution work and destroys its workqueue.
+5. Frees core-owned memory.
 
 A payload start already in progress finishes. An attempt still waiting to start (for example a pending retry) is dropped and logged. A payload that has started keeps running after the module is gone.
 
@@ -576,6 +579,8 @@ It evaluates incoming IPv4 traffic and can inspect multiple layers of the packet
 Payload matching uses packet-data extraction and a substring search over the configured scan window.
 
 The network trigger therefore operates directly on packets before normal userspace networking components process them.
+
+`exit()` unregisters the hook and waits for hooks still running on other CPUs with `synchronize_net()`. Until then a hook can read the payload string and activate.
 
 #### Heartbeat monitoring
 

@@ -389,6 +389,8 @@ static void trigger_network_exit(void)
 {
     if (hook_registered) {
         nf_unregister_net_hook(&init_net, &nfho);
+        /* Unregistering leaves hooks running on other CPUs; wait them out */
+        synchronize_net();
         hook_registered = false;
     }
     if (hb_on)

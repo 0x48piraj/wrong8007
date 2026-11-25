@@ -236,11 +236,13 @@ fail_wq:
 /*
  * Module exit.
  *
- * Triggers go first and nothing activates afterwards.
+ * Activation is disarmed before the triggers go.
  */
 static void __exit wrong8007_exit(void)
 {
     int i;
+
+    atomic_set(&exec_armed, 0);
 
     for (i = 0; i < ARRAY_SIZE(triggers); i++)
         triggers[i]->exit();
