@@ -284,6 +284,15 @@ while IFS= read -r tok; do
     fi
 
     case "$key" in
+        match_port|heartbeat_interval|heartbeat_timeout)
+            if [ -z "$val" ]; then
+                err "parameter '$key' needs a number"
+                continue
+            fi
+            ;;
+    esac
+
+    case "$key" in
         exec) exec_path=$val ;;
         phrase) need "$key" "$kbd" keyboard KEYBOARD; phrase=$val ;;
         usb_devices) need "$key" "$usb" USB USB; usb_devices=$val ;;
