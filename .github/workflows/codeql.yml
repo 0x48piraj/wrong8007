@@ -1,0 +1,63 @@
+name: codeql
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ master ]
+  pull_request:
+  schedule:
+    - cron: '23 4 * * 1'
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    name: codeql c
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      security-events: write
+    env:
+      KERNEL: 6.12.23
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential bc flex bison libelf-dev libssl-dev
+
+      # CodeQL cannot parse the per-CPU address space qualifiers of 6.19 and later headers
+      - name: restore kernel tree
+        id: cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/linux-${{ env.KERNEL }}
+          key: codeql-kernel-${{ env.KERNEL }}-v1
+
+      - name: download and prepare the kernel tree
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          cd ~
+          curl -fsSL "https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-$KERNEL.tar.xz" | tar -xJ
+          cd "linux-$KERNEL"
+          make -s defconfig
+          ./scripts/config -e MODULES -e MODULE_UNLOAD -e NETFILTER -e USB -e INPUT -e VT
+          make -s olddefconfig
+          make -s -j"$(nproc)" modules_prepare
+
+      - uses: github/codeql-action/init@915412ff23e8b7659517e607487dbeae018f2934 # v4.39.5
+        with:
+          languages: c-cpp
+          build-mode: manual
+          queries: security-extended
+
+      - name: build the module and the tools
+        run: |
+          make KDIR="$HOME/linux-$KERNEL" KBUILD_MODPOST_WARN=1
+          make -C tools
+
+      - uses: github/codeql-action/analyze@915412ff23e8b7659517e607487dbeae018f2934 # v4.39.5
+        with:
+          category: /language:c-cpp
