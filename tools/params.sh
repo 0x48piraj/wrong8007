@@ -294,6 +294,15 @@ while IFS= read -r tok; do
     esac
 
     case "$key" in
+        whitelist)
+            if [ "$has_val" -eq 1 ] && [ -z "$val" ]; then
+                err "parameter '$key' needs one of y, n, 1, 0, on, off"
+                continue
+            fi
+            ;;
+    esac
+
+    case "$key" in
         exec) exec_path=$val ;;
         phrase) need "$key" "$kbd" keyboard KEYBOARD; phrase=$val ;;
         usb_devices) need "$key" "$usb" USB USB; usb_devices=$val ;;
