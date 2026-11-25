@@ -204,6 +204,7 @@ check_usb() {
     count=0
     old_ifs=$IFS
     IFS=','
+    set -f
     for rule in $rules; do
         IFS=$old_ifs
         rule=$(printf '%s' "$rule" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
@@ -211,6 +212,7 @@ check_usb() {
             count=$((count + 1))
             if [ "$count" -gt 16 ]; then
                 err "too many USB rules (max 16)"
+                set +f
                 IFS=$old_ifs
                 return
             fi
@@ -218,6 +220,7 @@ check_usb() {
         fi
         IFS=','
     done
+    set +f
     IFS=$old_ifs
     [ "$count" -gt 0 ] || err "usb_devices is set but contains no rules"
 }
