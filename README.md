@@ -235,7 +235,7 @@ make uninstall
 
 The first trigger to fire runs the payload **once**. Later activations do nothing until the module is reloaded.
 
-The kernel log shows whether the payload started. A payload that fails to start is retried with backoff for about a minute and a half (for example when the file is missing or the system is resuming from suspend). A payload that started is never run again and keeps running after the module is unloaded. Its exit status isn't collected.
+The kernel log shows whether the payload started. A payload that fails to start is retried with backoff for about a minute and a half (for example when the file is missing). While the system suspends or resumes the payload waits without using up those attempts. A payload that started is never run again and keeps running after the module is unloaded. Its exit status isn't collected.
 
 > [!TIP]
 > Wrap the payload while you test it to see its exit status in the journal:

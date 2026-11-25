@@ -117,6 +117,14 @@ static void do_exec_work(struct work_struct *w)
         return;
     }
 
+    /* User mode helpers are off while the system suspends; wait it out */
+    if (ret == -EBUSY && !READ_ONCE(scrubbed)) {
+        strikes--;
+        wb_dbg("user mode helpers are paused, retrying\n");
+        queue_delayed_work(exec_wq, &exec_work, COOLDOWN_MIN);
+        return;
+    }
+
     if (READ_ONCE(scrubbed) || strikes >= MAX_STRIKES) {
         wb_err("payload failed to start (err=%d), giving up after %u attempt(s)\n",
                ret, strikes);

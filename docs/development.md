@@ -260,8 +260,9 @@ The core waits only until the payload has started (`UMH_WAIT_EXEC`). The payload
 |---|---|
 | Started | Logs the start and never runs the payload again |
 | Failed to start | Logs the error and retries with backoff for about a minute and a half |
+| User mode helpers disabled | Retries every second without counting the attempt |
 
-A payload fails to start when the file is missing or not executable, when memory is short or while usermode helpers are disabled around suspend and resume.
+A payload fails to start when the file is missing or not executable or when memory is short. User mode helpers are disabled around suspend and resume; the core waits for them without using up its attempts.
 
 A long-running payload holds no kernel worker and module unload never waits for it.
 
