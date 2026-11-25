@@ -257,11 +257,14 @@ options wrong8007 exec=/usr/local/sbin/wipe phrase="correct horse battery"
 
 #### Limitations
 
-* Matches the characters the kernel's console keymap resolves keys to.
+* Matches the characters the kernel's console keymap resolves keys to. X11 and Wayland layouts don't change them. Keep the console keymap on the layout you type with (`localectl set-keymap`).
 * Each key must resolve to a single Latin-1 character. Special keys (Shift, Ctrl, arrows and F-keys) are ignored.
 * Dead-key and Compose compositions are invisible to the keyboard notifier and cannot be matched.
 * Requires the phrase to be typed **without mistakes**. A wrong key restarts the match.
-* Does not capture keys from remote sessions or from consoles in `VC_RAW`, `VC_MEDIUMRAW` or `VC_OFF` mode.
+* Does not capture keys from remote sessions.
+
+> [!CAUTION]
+> The phrase fires wherever you type it. That includes desktop applications, terminals and login prompts. Pick a phrase you never type by accident.
 
 ## USB-based triggers
 
