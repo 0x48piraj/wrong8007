@@ -144,7 +144,7 @@ is_ipv4() {
 
 is_uint() {
     case "$1" in
-        ''|*[!0-9]*) return 1 ;;
+        ''|*[!0-9]*|0?*) return 1 ;;
     esac
     # Refuse values too long for 32-bit sh arithmetic or the kernel's uint
     [ "${#1}" -le 9 ]
