@@ -28,6 +28,7 @@
 - [ ] The module loads with the change (`make load PARAMS=<file>`) and unloads cleanly (`make remove`)
 - [ ] The trigger fires on the condition it should and stays quiet on the ones it shouldn't
 - [ ] `dmesg` shows no new warnings and no trigger values
+- [ ] New behavior has an automated test (CI or `nix/test.nix`)
 - [ ] CI passes
 
 ### Evidence
