@@ -2,6 +2,7 @@
 
 <p align="center">
   <a href="https://www.bestpractices.dev/projects/17091"><img src="https://www.bestpractices.dev/projects/17091/badge" alt="OpenSSF Best Practices"></a>
+  <a href="https://scorecard.dev/viewer/?uri=github.com/0x48piraj/wrong8007"><img src="https://api.scorecard.dev/projects/github.com/0x48piraj/wrong8007/badge" alt="OpenSSF Scorecard"></a>
   <a href="https://github.com/0x48piraj/wrong8007/actions/workflows/build.yml"><img src="https://img.shields.io/github/actions/workflow/status/0x48piraj/wrong8007/build.yml?branch=master&amp;label=build" alt="Build"></a>
   <a href="https://github.com/0x48piraj/wrong8007/actions/workflows/codeql.yml"><img src="https://img.shields.io/github/actions/workflow/status/0x48piraj/wrong8007/codeql.yml?branch=master&amp;label=CodeQL" alt="CodeQL"></a>
   <a href="https://github.com/0x48piraj/wrong8007/releases/latest"><img src="https://img.shields.io/github/v/release/0x48piraj/wrong8007?label=release" alt="Latest release"></a>
