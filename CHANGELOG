@@ -2,6 +2,33 @@
 
 Notable changes to Wrong Boot (wrong8007).
 
+## 0.1.4 (2026-11-26)
+
+This release fixes a kernel crash when a packet was still in the network trigger's hook as the module unloaded. The parameter check now refuses what the kernel refuses and keeps words that may belong to a secret out of its errors.
+
+### Fixes
+
+* Kernel crash when a packet was still in the network trigger's hook during unload
+* Payload start attempts used up while user mode helpers were off around suspend
+* `params-check`, `make load` and `make load-installed` judging the build profile instead of the module that loads
+* Parameter check errors that printed a stray word (a space after `=` or an unquoted phrase can split a secret)
+* Parameter check passing values the kernel refuses (numbers with a leading zero, empty numbers, empty bools, USB rules with an empty event or glob characters)
+
+### Packaging
+
+* Build provenance also attached as an in-toto attestation bundle (`wrong8007-<version>.intoto.jsonl`)
+* No debug symbols package for `wrong8007-utils`
+
+### Project
+
+* Badges for the build, CodeQL, OpenSSF Best Practices, the latest release and the license
+* Contributor guide asks for an automated test with new behavior
+
+### Tooling
+
+* CodeQL analysis on every push
+* OpenSSF Scorecard results published on every push and weekly
+
 ## 0.1.3 (2026-11-25)
 
 This release packages Wrong Boot for Debian, Ubuntu and NixOS and adds a Secure Boot guide. The module now builds on kernels that lack a trigger's subsystem and leaves that trigger out.

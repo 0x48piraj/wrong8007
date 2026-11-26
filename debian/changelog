@@ -1,3 +1,10 @@
+wrong8007 (0.1.4-1) unstable; urgency=medium
+
+  * New upstream release.
+  * No debug symbols package for wrong8007-utils.
+
+ -- Piyush Raj <hello@piyushraj.org>  Thu, 26 Nov 2026 08:02:34 +0530
+
 wrong8007 (0.1.3-1) unstable; urgency=medium
 
   * Debian packages wrong8007-dkms and wrong8007-utils.
