@@ -10,7 +10,7 @@ pkgbase = wrong8007
 	makedepends = glibc
 	makedepends = kmod
 	source = https://github.com/0x48piraj/wrong8007/releases/download/0.1.4/wrong8007-0.1.4.tar.gz
-	sha256sums = SKIP
+	sha256sums = f835d47283c9bdccbe715facd53021f559a2d3a1c0f26aa1b30b8f0781936661
 
 pkgname = wrong8007-dkms
 	pkgdesc = DKMS module, parameter validation and systemd service for wrong8007
