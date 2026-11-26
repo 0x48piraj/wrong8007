@@ -108,11 +108,13 @@ params-init:
 
 
 #
-# Validate parameters against the build profile.
+# Validate parameters against the module the build produced.
 #
 
+CHECK_BUILD = $(if $(wildcard $(ROOT)/wrong8007.ko),$(ROOT)/wrong8007.ko,$(PROFILE))
+
 params-check:
-	@sudo sh "$(ROOT)/tools/params.sh" check "$(PROFILE)" "$(PARAMS)"
+	@sudo sh "$(ROOT)/tools/params.sh" check "$(CHECK_BUILD)" "$(PARAMS)"
 
 
 #
@@ -149,14 +151,15 @@ load: build
 		echo "the module is disabled in the build profile."; \
 		exit 1; \
 	}
-	@sudo sh "$(ROOT)/tools/params.sh" insmod "$(PROFILE)" "$(PARAMS)" "$(ROOT)/wrong8007.ko"
+	@sudo sh "$(ROOT)/tools/params.sh" insmod "$(ROOT)/wrong8007.ko" "$(PARAMS)" "$(ROOT)/wrong8007.ko"
 
 
 #
 # Load the installed module using the dedicated configuration.
 #
 
-load-installed: params-check
+load-installed:
+	@sudo sh "$(ROOT)/tools/params.sh" check wrong8007 "$(PARAMS)"
 	sudo modprobe -C "$(PARAMS)" wrong8007
 
 

@@ -97,6 +97,8 @@ Scripts need _shebang_ and the payload takes no arguments. The other options arm
 
 `params-check` refuses anything the kernel would reject or quietly ignore. That covers unknown names, values for triggers that aren't compiled in and a configuration that arms no trigger.
 
+The check reads the triggers from the module `make` built. A trigger whose kernel subsystem is missing is left out of that module with a warning during the build. Its parameters then fail the check. Before the first build the check goes by `.config`.
+
 > [!IMPORTANT]
 > Keep the parameters out of `/etc/modprobe.d`. Initramfs tools copy that directory into the boot image. The image is often readable by every user and `/boot` is usually left unencrypted.
 
@@ -114,7 +116,7 @@ Load it (this checks the parameters first):
 make load-installed
 ```
 
-It runs `modprobe -C /etc/wrong8007/wrong8007.conf wrong8007`. A plain `modprobe wrong8007` reads no parameters and the module refuses to load.
+It checks the parameters against the installed module and runs `modprobe -C /etc/wrong8007/wrong8007.conf wrong8007`. A plain `modprobe wrong8007` reads no parameters and the module refuses to load.
 
 `make load` loads the module you just built without installing it. It's meant for development. It passes the parameters on the `insmod` command line where other users can briefly see them in the process list.
 
