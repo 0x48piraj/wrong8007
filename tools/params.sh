@@ -280,7 +280,15 @@ while IFS= read -r tok; do
     val=$(printf '%s' "$val" | tr -d '"')
 
     if [ "$has_val" -eq 0 ] && [ "$key" != whitelist ]; then
-        err "parameter '$key' has no value"
+        case "$key" in
+            exec|phrase|usb_devices|match_mac|match_ip|match_port|match_payload|\
+                heartbeat_host|heartbeat_interval|heartbeat_timeout)
+                err "parameter '$key' has no value"
+                ;;
+            *)
+                err "a word without a parameter name follows (not shown); quote values with spaces and put no space around '='"
+                ;;
+        esac
         continue
     fi
 
